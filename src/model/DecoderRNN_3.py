@@ -148,11 +148,32 @@ class DecoderRNN_3(BaseRNN):
         sequence_symbols_list = []
         #attn_list = []
         decoder_hidden = decoder_init_hidden
+        
+        mask_op = torch.ones((decoder_input.size(0),len(self.class_list)))
+        filters_op = self.filter_op()
+        mask_op[:,filters_op] = 1e-20
+
+        mask_digit = torch.ones((decoder_input.size(0),len(self.class_list)))
+        filters_digit = []
+        for k,v in self.class_dict.items():
+            if 'temp' in k:
+                filters_digit.append(v) 
+        filters_digit = np.array(filters_digit)
+        mask_digit[:, filters_digit] = 1e-20
+        
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, function=function)
             #attn_list.append(attn)
             step_output = decoder_output.squeeze(1)
+            step_output = torch.exp(step_output)           
+
+            if di % 2 == 0:
+                step_output = mask_op.cuda() * step_output
+            else:
+                step_output = mask_digit.cuda() * step_output 
+
+            step_output = torch.log(step_output)
             #print step_output.size()
             if self.use_rule == False:
                 symbols = self.decode(di, step_output)
