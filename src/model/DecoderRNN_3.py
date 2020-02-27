@@ -139,19 +139,20 @@ class DecoderRNN_3(BaseRNN):
 
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                 max_length,  function):
+                                                 max_length,  function, num_list):
         '''
         decoder_input: batch x 1
         decoder_output: batch x 1 x classes,  probility_log
         '''
+        
         decoder_outputs_list = []
         sequence_symbols_list = []
         #attn_list = []
         decoder_hidden = decoder_init_hidden
-        
+
         mask_op = torch.ones((decoder_input.size(0),len(self.class_list)))
         filters_op = self.filter_op()
-        mask_op[:,filters_op] = 1e-20
+        mask_op[:,filters_op] = 1e-12
 
         mask_digit = torch.ones((decoder_input.size(0),len(self.class_list)))
         filters_digit = []
@@ -159,36 +160,55 @@ class DecoderRNN_3(BaseRNN):
             if 'temp' in k:
                 filters_digit.append(v) 
         filters_digit = np.array(filters_digit)
-        mask_digit[:, filters_digit] = 1e-20
+        mask_digit[:, filters_digit] = 1e-12
+
+        mask_temp = torch.ones((decoder_input.size(0),len(self.class_list)))
+
+        if num_list is not None:
+            for i in range (len(num_list)):
+                filters_temp = []
+
+                for k,v in self.class_dict.items():                
+                    if 'temp' in k:
+                        if (ord(k[5]) - ord('a') >= len(num_list[i])):
+                            filters_temp.append(v) 
+                filter_temp = np.array (filters_temp)
+                mask_temp[i, filters_temp] = 1e-12
+
+        # mask_len = torch.ones((decoder_input.size(0),len(self.class_list)))
+        # filters_
         
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, function=function)
             #attn_list.append(attn)
             step_output = decoder_output.squeeze(1)
-            step_output = torch.exp(step_output)           
-
+            step_output = torch.exp(step_output)
+            
             if di % 2 == 0:
                 step_output = mask_op.cuda() * step_output
             else:
-                step_output = mask_digit.cuda() * step_output 
-
+                step_output = mask_digit.cuda() * step_output
+            
+            step_output = mask_temp.cuda() * step_output
             step_output = torch.log(step_output)
-            #print step_output.size()
+                
             if self.use_rule == False:
                 symbols = self.decode(di, step_output)
             else:
-                symbols = self.decode_rule(di, sequence_symbols_list, step_output) 
+                step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output) 
+
             decoder_input = self.symbol_norm(symbols)
+            
             decoder_outputs_list.append(step_output)
             sequence_symbols_list.append(symbols)
-        #print sequence_symbols_list
+
         return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 
 
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, template_flag=True,\
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
-                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None):
+                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
@@ -232,7 +252,7 @@ class DecoderRNN_3(BaseRNN):
             decoder_input = pad_var#.unsqueeze(1) # batch x 1
             #pdb.set_trace()
             return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                  max_length, function)
+                                                  max_length, function, num_list)
 
 
     def rule(self, symbol):
@@ -290,7 +310,7 @@ class DecoderRNN_3(BaseRNN):
         32*28
         '''
         op_list = ['+','-','*','/','^']
-        cur_out = current.cpu().data.numpy()
+        cur_out = current
         #print len(sequence_symbols_list)
         #pdb.set_trace()
         cur_symbols = []
@@ -299,26 +319,43 @@ class DecoderRNN_3(BaseRNN):
             filters = np.append(self.filter_op(), self.filter_END())
             for i in range(cur_out.shape[0]):
                 cur_out[i][filters] = -float('inf')
-                cur_symbols.append(np.argmax(cur_out[i]))
+                # cur_symbols.append(np.argmax(cur_out[i]))
+                cur_symbols = cur_out.topk(1)[1]
+        # else:
+        #     for i in range(sequence_symbols_list[0].size(0)):
+        #         num_var = 0
+        #         num_op = 0
+        #         for j in range(len(sequence_symbols_list)):
+        #             symbol = sequence_symbols_list[j][i].cpu().data[0]
+        #             if self.class_list[symbol] in op_list:
+        #                 num_op += 1
+        #             elif 'temp' in self.class_list[symbol] or self.class_list[symbol] in ['1', 'PI']:
+        #                 num_var += 1
+        #         if num_var >= num_op + 2:
+        #             filters = self.filter_END()
+        #             cur_out[i][filters] = -float('inf')
+        #         elif num_var == num_op + 1:
+        #             filters = self.filter_op() 
+        #             cur_out[i][filters] = -float('inf')
+        #         cur_symbols.append(np.argmax(cur_out[i]))
         else:
             for i in range(sequence_symbols_list[0].size(0)):
-                num_var = 0
-                num_op = 0
-                for j in range(len(sequence_symbols_list)):
-                    symbol = sequence_symbols_list[j][i].cpu().data[0]
-                    if self.class_list[symbol] in op_list:
-                        num_op += 1
-                    elif 'temp' in self.class_list[symbol] or self.class_list[symbol] in ['1', 'PI']:
-                        num_var += 1
-                if num_var >= num_op + 2:
-                    filters = self.filter_END()
-                    cur_out[i][filters] = -float('inf')
-                elif num_var == num_op + 1:
-                    filters = self.filter_op() 
-                    cur_out[i][filters] = -float('inf')
-                cur_symbols.append(np.argmax(cur_out[i]))
-        cur_symbols = Variable(torch.LongTensor(cur_symbols))
-        cur_symbols = torch.unsqueeze(cur_symbols, 1)
-        cur_symbols = cur_symbols.cuda()
-        return cur_symbols
+                symbol = sequence_symbols_list[-1][i].cpu().data[0]
+                filters = []
+                if self.class_list[symbol] in op_list:
+                    filters = np.append(self.filter_op(), self.filter_END())
+
+                elif 'temp' in self.class_list[symbol] or self.class_list[symbol] in ['1', 'PI']:
+                    for k,v in self.class_dict.items():
+                        if 'temp' in k:
+                            filters.append(v)
+                    filters = np.array(filters)
+
+                cur_out[i][filters] = -float('inf')
+                cur_symbols = cur_out.topk(1)[1]  
+
+        # cur_symbols = Variable(torch.LongTensor(cur_symbols))
+        # cur_symbols = torch.unsqueeze(cur_symbols, 1)
+        # cur_symbols = cur_symbols.cuda()
+        return cur_out, cur_symbols
 
