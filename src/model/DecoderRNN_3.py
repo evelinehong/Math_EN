@@ -174,9 +174,6 @@ class DecoderRNN_3(BaseRNN):
                             filters_temp.append(v) 
                 filter_temp = np.array (filters_temp)
                 mask_temp[i, filters_temp] = 1e-12
-
-        # mask_len = torch.ones((decoder_input.size(0),len(self.class_list)))
-        # filters_
         
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
