@@ -1,7 +1,6 @@
 import sys
 import random
 import numpy as np
-sys.path.append('/home/demolwang/demolwang/math_word_problem/critical-based/auto_mwp/seq2seq_v2/src')
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
@@ -52,7 +51,7 @@ class SupervisedTrainer(object):
 
 
     def _train_batch(self, input_variables, input_lengths,target_variables, target_lengths, model,\
-                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag):
+                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list):
         decoder_outputs, decoder_hidden, symbols_list = \
                                       model(input_variable = input_variables, 
                                       input_lengths = input_lengths, 
@@ -65,7 +64,8 @@ class SupervisedTrainer(object):
                                       vocab_dict = self.vocab_dict,
                                       vocab_list = self.vocab_list,
                                       class_dict = self.class_dict,
-                                      class_list = self.class_list)
+                                      class_list = self.class_list,
+                                      num_list = num_list)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -147,11 +147,11 @@ class SupervisedTrainer(object):
             for batch_data_dict in batch_generator:
                 step += 1
                 step_elapsed += 1
-
                 input_variables = batch_data_dict['batch_encode_pad_idx']
                 input_lengths = batch_data_dict['batch_encode_len']
                 target_variables = batch_data_dict['batch_decode_pad_idx']
                 target_lengths = batch_data_dict['batch_decode_len']
+                num_list = batch_data_dict['batch_num_list']                
 
                 #cuda
                 input_variables = Variable(torch.LongTensor(input_variables))
@@ -170,7 +170,8 @@ class SupervisedTrainer(object):
                                                    teacher_forcing_ratio = teacher_forcing_ratio,
                                                    mode = mode, 
                                                    batch_size = batch_size,
-                                                   post_flag = post_flag)
+                                                   post_flag = post_flag,
+                                                   num_list = num_list)
 
 
                 right_count += com_list[0]
