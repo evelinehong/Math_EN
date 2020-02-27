@@ -13,9 +13,9 @@ import jieba
 class DataLoader():
     def __init__(self, args, emb_dim=128):
         self.args = args
-        self.math23k_train_list = read_data_json("./data/train23k_processed.json")
-        self.math23k_valid_list = read_data_json("./data/valid23k_processed.json")
-        self.math23k_test_list = read_data_json("./data/test23k_processed.json")
+        self.math23k_train_list = read_data_json("./data/train23k_processed_filtered.json")
+        self.math23k_valid_list = read_data_json("./data/valid23k_processed_filtered.json")
+        self.math23k_test_list = read_data_json("./data/test23k_processed_filtered.json")
 
         self.emb_vectors, self.vocab_list, self.decode_classes_list = self.preprocess_and_word2vec(emb_dim)
         self.vocab_dict = dict([(elem, idx) for idx, elem in enumerate(self.vocab_list)])
