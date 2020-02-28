@@ -39,19 +39,19 @@ class DecoderRNN_3(BaseRNN):
         self.attention = Attention_1(hidden_size)
 
     #def _init_state(self, encoder_hidden, op_type):
-        
+
 
     def forward_step(self, input_var, hidden, encoder_outputs, function):
         '''
         normal forward, step by step or all steps together
         '''
-        
+
         if len(input_var.size()) == 1:
             input_var = torch.unsqueeze(input_var,1)
         batch_size = input_var.size(0)
         output_size = input_var.size(1)
         embedded = self.embedding(input_var)
-        
+
         embedded = self.input_dropout(embedded)
 
         output, hidden = self.rnn(embedded, hidden)
@@ -68,13 +68,13 @@ class DecoderRNN_3(BaseRNN):
         step_output: batch x classes , prob_log
         symbols: batch x 1
         '''
-        symbols = step_output.topk(1)[1] 
+        symbols = step_output.topk(1)[1]
         return symbols
 
     def decode_rule(self, step, sequence_symbols_list, step_output):
         symbols = self.rule_filter(sequence_symbols_list, step_output)
         return symbols
-        
+
     def forward_normal_teacher_1(self, decoder_inputs, decoder_init_hidden, function):
         '''
         decoder_input: batch x seq_lengths x indices( sub last(-1), add first(sos_id))
@@ -122,15 +122,15 @@ class DecoderRNN_3(BaseRNN):
         return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 
     def symbol_norm(self, symbols):
-        symbols = symbols.view(-1).data.cpu().numpy() 
+        symbols = symbols.view(-1).data.cpu().numpy()
         new_symbols = []
         for idx in symbols:
-            #print idx, 
+            #print idx,
             #print self.class_list[idx],
             #pdb.set_trace()
             #print self.vocab_dict[self.class_list[idx]]
             new_symbols.append(self.vocab_dict[self.class_list[idx]])
-        new_symbols = Variable(torch.LongTensor(new_symbols)) 
+        new_symbols = Variable(torch.LongTensor(new_symbols))
         #print new_symbols
         new_symbols = torch.unsqueeze(new_symbols, 1)
         if self.use_cuda:
@@ -139,12 +139,12 @@ class DecoderRNN_3(BaseRNN):
 
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                 max_length,  function, num_list):
+                                                 max_length,  function, num_list, fix_len=False):
         '''
         decoder_input: batch x 1
         decoder_output: batch x 1 x classes,  probility_log
         '''
-        
+
         decoder_outputs_list = []
         sequence_symbols_list = []
         #attn_list = []
@@ -158,45 +158,66 @@ class DecoderRNN_3(BaseRNN):
         filters_digit = []
         for k,v in self.class_dict.items():
             if 'temp' in k:
-                filters_digit.append(v) 
+                filters_digit.append(v)
         filters_digit = np.array(filters_digit)
         mask_digit[:, filters_digit] = 1e-12
 
         mask_temp = torch.ones((decoder_input.size(0),len(self.class_list)))
 
+        if self.use_cuda:
+            mask_op = mask_op.cuda()
+            mask_digit = mask_digit.cuda()
+            mask_temp = mask_temp.cuda()
+
         if num_list is not None:
             for i in range (len(num_list)):
                 filters_temp = []
 
-                for k,v in self.class_dict.items():                
+                for k,v in self.class_dict.items():
                     if 'temp' in k:
                         if (ord(k[5]) - ord('a') >= len(num_list[i])):
-                            filters_temp.append(v) 
+                            filters_temp.append(v)
                 filter_temp = np.array (filters_temp)
                 mask_temp[i, filters_temp] = 1e-12
-        
+
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, function=function)
             #attn_list.append(attn)
             step_output = decoder_output.squeeze(1)
             step_output = torch.exp(step_output)
-            
+
             if di % 2 == 0:
-                step_output = mask_op.cuda() * step_output
+                step_output = mask_op * step_output
             else:
-                step_output = mask_digit.cuda() * step_output
-            
-            step_output = mask_temp.cuda() * step_output
+                step_output = mask_digit * step_output
+
+            step_output = mask_temp * step_output
+
+            # fixRng-like:
+            # force EOS if twice num_list length,
+            # force not EOS if less than half num_list length (make configurable?)
+            if fix_len and num_list is not None:
+                mask = torch.ones((decoder_input.size(0), len(self.class_list)))
+                for i in range(step_output.shape[0]):
+                    if di == len(num_list[i])*2:
+                        mask[i, self.filter_END()] = 1
+                    elif di < len(num_list[i])/2:
+                        mask[i, :] = 1
+                        mask[i, self.filter_END()] = 1e-12
+                if self.use_cuda:
+                    mask = mask.cuda()
+                step_output = mask * step_output
+
             step_output = torch.log(step_output)
-                
+
             if self.use_rule == False:
                 symbols = self.decode(di, step_output)
             else:
-                step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output) 
+                step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output)
 
             decoder_input = self.symbol_norm(symbols)
-            
+
             decoder_outputs_list.append(step_output)
             sequence_symbols_list.append(symbols)
 
@@ -205,7 +226,7 @@ class DecoderRNN_3(BaseRNN):
 
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, template_flag=True,\
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
-                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None):
+                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None, fix_len=False):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
@@ -241,7 +262,7 @@ class DecoderRNN_3(BaseRNN):
             ''' all steps together'''
             inputs = torch.cat((pad_var, inputs), 1) # careful concate  batch x (seq_len+1)
             inputs = inputs[:, :-1] # batch x seq_len
-            decoder_inputs = inputs 
+            decoder_inputs = inputs
             return self.forward_normal_teacher(decoder_inputs, decoder_init_hidden, encoder_outputs,\
                                                              function)
         else:
@@ -257,25 +278,25 @@ class DecoderRNN_3(BaseRNN):
         if self.class_list[symbol] in ['+', '-', '*', '/']:
             filters.append(self.class_dict['+'])
             filters.append(self.class_dict['-'])
-            filters.append(self.class_dict['*']) 
-            filters.append(self.class_dict['/']) 
-            filters.append(self.class_dict[')']) 
-            filters.append(self.class_dict['=']) 
+            filters.append(self.class_dict['*'])
+            filters.append(self.class_dict['/'])
+            filters.append(self.class_dict[')'])
+            filters.append(self.class_dict['='])
         elif self.class_list[symbol] == '=':
-            filters.append(self.class_dict['+']) 
-            filters.append(self.class_dict['-']) 
-            filters.append(self.class_dict['*']) 
-            filters.append(self.class_dict['/']) 
-            filters.append(self.class_dict['=']) 
-            filters.append(self.class_dict[')']) 
+            filters.append(self.class_dict['+'])
+            filters.append(self.class_dict['-'])
+            filters.append(self.class_dict['*'])
+            filters.append(self.class_dict['/'])
+            filters.append(self.class_dict['='])
+            filters.append(self.class_dict[')'])
         elif self.class_list[symbol] == '(':
-            filters.append(self.class_dict['(']) 
-            filters.append(self.class_dict[')']) 
-            filters.append(self.class_dict['+']) 
-            filters.append(self.class_dict['-']) 
-            filters.append(self.class_dict['*']) 
-            filters.append(self.class_dict['/']) 
-            filters.append(self.class_dict['=']) 
+            filters.append(self.class_dict['('])
+            filters.append(self.class_dict[')'])
+            filters.append(self.class_dict['+'])
+            filters.append(self.class_dict['-'])
+            filters.append(self.class_dict['*'])
+            filters.append(self.class_dict['/'])
+            filters.append(self.class_dict['='])
         elif self.class_list[symbol] == ')':
             filters.append(self.class_dict['('])
             filters.append(self.class_dict[')'])
@@ -284,23 +305,23 @@ class DecoderRNN_3(BaseRNN):
                     filters.append(v)
         elif 'temp' in self.class_list[symbol]:
             filters.append(self.class_dict['('])
-            filters.append(self.class_dict['=']) 
+            filters.append(self.class_dict['='])
         return np.array(filters)
 
     def filter_op(self):
         filters = []
-        filters.append(self.class_dict['+']) 
-        filters.append(self.class_dict['-']) 
-        filters.append(self.class_dict['*']) 
-        filters.append(self.class_dict['/']) 
-        filters.append(self.class_dict['^']) 
+        filters.append(self.class_dict['+'])
+        filters.append(self.class_dict['-'])
+        filters.append(self.class_dict['*'])
+        filters.append(self.class_dict['/'])
+        filters.append(self.class_dict['^'])
         return np.array(filters)
 
     def filter_END(self):
         filters = []
-        filters.append(self.class_dict['END_token']) 
+        filters.append(self.class_dict['END_token'])
         return np.array(filters)
-        
+
 
     def rule_filter(self, sequence_symbols_list, current):
         '''
@@ -349,7 +370,7 @@ class DecoderRNN_3(BaseRNN):
                     filters = np.array(filters)
 
                 cur_out[i][filters] = -float('inf')
-                cur_symbols = cur_out.topk(1)[1]  
+                cur_symbols = cur_out.topk(1)[1]
 
         # cur_symbols = Variable(torch.LongTensor(cur_symbols))
         # cur_symbols = torch.unsqueeze(cur_symbols, 1)

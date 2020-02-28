@@ -65,7 +65,8 @@ class SupervisedTrainer(object):
                                       vocab_list = self.vocab_list,
                                       class_dict = self.class_dict,
                                       class_list = self.class_list,
-                                      num_list = num_list)
+                                      num_list = num_list,
+                                      fix_len = True)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -229,16 +230,17 @@ class SupervisedTrainer(object):
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
 
-            #if valid_ans_acc > max_ans_acc:
-            #    max_ans_acc = valid_ans_acc
-            #    th_checkpoint = Checkpoint(model=model,
-            #                               optimizer=self.optimizer,
-            #                               epoch=epoch,
-            #                               step=step,
-            #                               train_acc_list = self.train_acc_list,
-            #                               test_acc_list = self.test_acc_list,
-            #                               loss_list = self.loss_list).\
-            #                                 save_according_name("./experiment", 'best')
+            if test_ans_acc > max_ans_acc:
+               max_ans_acc = test_ans_acc
+               th_checkpoint = Checkpoint(model=model,
+                                          optimizer=self.optimizer,
+                                          epoch=epoch,
+                                          step=step,
+                                          train_acc_list = self.train_acc_list,
+                                          test_acc_list = self.test_acc_list,
+                                          loss_list = self.loss_list).\
+                                            save_according_name("./experiment", 'best')
+               print(f"Checkpoint saved! max acc: {max_ans_acc}")
 
             #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))

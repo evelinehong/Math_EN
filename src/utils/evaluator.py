@@ -146,7 +146,7 @@ class Evaluator(object):
 
 
     def evaluate(self, model, data_loader, data_list, template_flag, batch_size, \
-                      evaluate_type, use_rule, mode, post_flag=False, name_save='train'):
+                      evaluate_type, use_rule, mode, post_flag=False, name_save='train', fix_len=False):
         batch_generator = data_loader.get_batch(data_list, batch_size, template_flag)
         total_num = len(data_list)
 
@@ -200,7 +200,8 @@ class Evaluator(object):
                                         vocab_dict = self.vocab_dict,
                                         vocab_list = self.vocab_list,
                                         class_dict = self.decode_classes_dict,
-                                        class_list = self.decode_classes_list)
+                                        class_list = self.decode_classes_list,
+                                        fix_len=fix_len)
 
 
             seqlist = symbols_list
