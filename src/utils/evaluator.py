@@ -201,6 +201,7 @@ class Evaluator(object):
                                         vocab_list = self.vocab_list,
                                         class_dict = self.decode_classes_dict,
                                         class_list = self.decode_classes_list,
+                                        num_list = batch_num_list,
                                         fix_len=fix_len)
 
 
