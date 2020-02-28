@@ -139,7 +139,7 @@ class DecoderRNN_3(BaseRNN):
 
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                 max_length,  function, num_list, fix_len=False):
+                                                 max_length,  function, num_list, fix_len):
         '''
         decoder_input: batch x 1
         decoder_output: batch x 1 x classes,  probility_log
@@ -270,7 +270,7 @@ class DecoderRNN_3(BaseRNN):
             decoder_input = pad_var#.unsqueeze(1) # batch x 1
             #pdb.set_trace()
             return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                  max_length, function, num_list)
+                                                  max_length, function, num_list, fix_len)
 
 
     def rule(self, symbol):

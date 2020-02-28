@@ -25,6 +25,7 @@ def get_args():
     parser.add_argument('--teacher-forcing-ratio', type=float, dest='teacher_forcing_ratio', default=1)
     parser.add_argument('--run-flag', type=str, dest='run_flag',default='train_23k')
     parser.add_argument('--post-flag', action='store_true', dest='post_flag', default=False)
+    parser.add_argument('--fix-len', action='store_true', dest='fix_len', default=False)
 
     args = parser.parse_args()
     return args

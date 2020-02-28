@@ -74,7 +74,8 @@ def step_one():
                            loss = loss,
                            print_every = 10,
                            teacher_schedule = False,
-                           checkpoint_dir_name = args.checkpoint_dir_name)
+                           checkpoint_dir_name = args.checkpoint_dir_name,
+                           fix_len = args.fix_len)
 
 
     print ('start training')

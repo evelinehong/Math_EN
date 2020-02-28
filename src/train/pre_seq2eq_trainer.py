@@ -12,7 +12,7 @@ import pdb
 
 class SupervisedTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
-                  loss, print_every, teacher_schedule, checkpoint_dir_name):
+                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_len):
         self.vocab_dict = vocab_dict
         self.vocab_list = vocab_list
         self.decode_classes_dict = decode_classes_dict
@@ -29,6 +29,8 @@ class SupervisedTrainer(object):
         self.loss = loss 
         if self.cuda_use == True:
             self.loss.cuda()
+
+        self.fix_len = fix_len
 
         self.print_every = print_every
 
@@ -66,7 +68,7 @@ class SupervisedTrainer(object):
                                       class_dict = self.class_dict,
                                       class_list = self.class_list,
                                       num_list = num_list,
-                                      fix_len = True)
+                                      fix_len = self.fix_len)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
