@@ -232,7 +232,8 @@ class SupervisedTrainer(object):
                                                                 use_rule = self.use_rule,
                                                                 mode = mode,
                                                                 post_flag=post_flag,
-                                                                use_rule_old=False)
+                                                                use_rule_old=False,
+                                                                name_save="test")
             self.train_acc_list.append((epoch, step, train_ans_acc))
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
