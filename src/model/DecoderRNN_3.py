@@ -151,24 +151,19 @@ class DecoderRNN_3(BaseRNN):
         decoder_hidden = decoder_init_hidden
 
         batch_size = decoder_input.size(0)
-        mask_op = torch.ones((batch_size, len(self.class_list)))
+        mask_op = torch.ones((batch_size, len(self.class_list)), dtype=torch.bool)
         filters_op = np.append(self.filter_op(), self.filter_END())
-        mask_op[:,filters_op] = 1e-12
+        mask_op[:,filters_op] = 0
 
-        mask_digit = torch.ones((batch_size, len(self.class_list)))
+        mask_digit = torch.ones((batch_size, len(self.class_list)), dtype=torch.bool)
         filters_digit = []
         for k,v in self.class_dict.items():
             if 'temp' in k or 'PI' == k or k.isdigit():
                 filters_digit.append(v)
         filters_digit = np.array(filters_digit)
-        mask_digit[:, filters_digit] = 1e-12
+        mask_digit[:, filters_digit] = 0
 
-        mask_temp = torch.ones((batch_size, len(self.class_list)))
-
-        if self.use_cuda:
-            mask_op = mask_op.cuda()
-            mask_digit = mask_digit.cuda()
-            mask_temp = mask_temp.cuda()
+        mask_temp = torch.ones((batch_size, len(self.class_list)), dtype=torch.bool)
 
         if num_list is not None:
             for i in range (len(num_list)):
@@ -179,7 +174,7 @@ class DecoderRNN_3(BaseRNN):
                         if (ord(k[5]) - ord('a') >= len(num_list[i])):
                             filters_temp.append(v)
                 filter_temp = np.array (filters_temp)
-                mask_temp[i, filters_temp] = 1e-12
+                mask_temp[i, filters_temp] = 0
 
         ended = torch.zeros(batch_size, dtype=torch.bool)
         for di in range(max_length):
@@ -189,13 +184,15 @@ class DecoderRNN_3(BaseRNN):
             step_output = decoder_output.squeeze(1)
             step_output = torch.exp(step_output)
 
+            mask = torch.ones((decoder_input.size(0), len(self.class_list)), dtype=torch.bool)
+
             if self.use_rule:
                 if di % 2 == 0:
-                    step_output = mask_op * step_output
+                    mask = mask & mask_op
                 else:
-                    step_output = mask_digit * step_output
+                    mask = mask & mask_digit
 
-                step_output = mask_temp * step_output
+                mask = mask & mask_temp
 
             # fixRng-like:
             # force EOS if greater than twice num_list length-1 (+2 for occasional constants)
@@ -204,19 +201,22 @@ class DecoderRNN_3(BaseRNN):
                 max_len = list(map(lambda ls: len(ls)*2-1 + 2, num_list))
                 min_len = list(map(lambda ls: len(ls) // 2, num_list))
 
-                mask = torch.ones((decoder_input.size(0), len(self.class_list)))
+                mask_rng = torch.ones((decoder_input.size(0), len(self.class_list)), dtype=torch.bool)
                 for i in range(step_output.shape[0]):
                     if di < min_len[i]:
-                        mask[i, self.filter_END()] = 1e-12
+                        mask_rng[i, self.filter_END()] = 0
                     elif di == max_len[i]:
                         if not ended[i]:
                             all_except_end = list(range(len(self.class_list)))
                             all_except_end.remove(self.filter_END())
-                            mask[i, all_except_end] = 1e-12
-                if self.use_cuda:
-                    mask = mask.cuda()
-                step_output = mask * step_output
+                            mask_rng[i, all_except_end] = 0
+                mask = mask & mask_rng
 
+            mask[mask == 0] = 1e-12
+
+            if self.use_cuda:
+                mask = mask.cuda()
+            step_output = mask * step_output
             step_output = torch.log(step_output)
 
             if self.use_rule_old == False:
