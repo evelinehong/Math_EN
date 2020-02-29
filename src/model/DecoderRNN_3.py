@@ -152,7 +152,7 @@ class DecoderRNN_3(BaseRNN):
 
         batch_size = decoder_input.size(0)
         mask_op = torch.ones((batch_size, len(self.class_list)))
-        filters_op = self.filter_op()
+        filters_op = np.append(self.filter_op(), self.filter_END())
         mask_op[:,filters_op] = 1e-12
 
         mask_digit = torch.ones((batch_size, len(self.class_list)))
