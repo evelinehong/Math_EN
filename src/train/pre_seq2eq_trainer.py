@@ -69,7 +69,8 @@ class SupervisedTrainer(object):
                                       class_dict = self.class_dict,
                                       class_list = self.class_list,
                                       num_list = num_list,
-                                      fix_rng = self.fix_rng)
+                                      fix_rng = self.fix_rng,
+                                      use_rule_old = False)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -208,7 +209,8 @@ class SupervisedTrainer(object):
                                                                 evaluate_type = 0,
                                                                 use_rule = self.use_rule,
                                                                 mode = mode,
-                                                                post_flag=post_flag)
+                                                                post_flag=post_flag,
+                                                                use_rule_old=False)
             #valid_temp_acc, valid_ans_acc =\
             #                            self.evaluator.evaluate(model = model,
             #                                                    data_loader = data_loader,
@@ -218,7 +220,8 @@ class SupervisedTrainer(object):
             #                                                    evaluate_type = 0,
             #                                                    use_rule = self.use_rule,
             #                                                    mode = mode,
-            #                                                    post_flag=post_flag)
+            #                                                    post_flag=post_flag,
+            #                                                    use-rule_old=False)
             test_temp_acc, test_ans_acc =\
                                         self.evaluator.evaluate(model = model,
                                                                 data_loader = data_loader,
@@ -228,7 +231,8 @@ class SupervisedTrainer(object):
                                                                 evaluate_type = 0,
                                                                 use_rule = self.use_rule,
                                                                 mode = mode,
-                                                                post_flag=post_flag)
+                                                                post_flag=post_flag,
+                                                                use_rule_old=False)
             self.train_acc_list.append((epoch, step, train_ans_acc))
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))

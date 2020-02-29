@@ -122,7 +122,8 @@ def step_one_test():
                                                      use_rule = args.use_rule,
                                                      mode = args.mode,
                                                      post_flag=args.post_flag,
-                                                     name_save = name)
+                                                     name_save = name,
+                                                     use_rule_old=False)
     print (test_temp_acc, test_ans_acc)
 
 def step_three():
@@ -151,7 +152,8 @@ def step_three():
                                                      batch_size = 64,
                                                      evaluate_type = 0,
                                                      use_rule = args.use_rule,
-                                                     mode = args.mode)
+                                                     mode = args.mode,
+                                                     use_rule_old=False)
     print (test_temp_acc, test_ans_acc)
 
 if __name__ == "__main__":

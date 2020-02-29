@@ -113,7 +113,7 @@ class DecoderRNN_3(BaseRNN):
                 decoder_input, decoder_hidden, encoder_outputs, function=function)
             #attn_list.append(attn)
             step_output = decoder_output.squeeze(1)
-            if self.use_rule == False:
+            if self.use_rule_old == False:
                 symbols = self.decode(di, step_output)
             else:
                 symbols = self.decode_rule(di, sequence_symbols_list, step_output)
@@ -219,7 +219,7 @@ class DecoderRNN_3(BaseRNN):
 
             step_output = torch.log(step_output)
 
-            if self.use_rule == False:
+            if self.use_rule_old == False:
                 symbols = self.decode(di, step_output)
             else:
                 step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output)
@@ -236,11 +236,13 @@ class DecoderRNN_3(BaseRNN):
 
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, template_flag=True,\
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
-                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None, fix_rng=False):
+                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None,
+                fix_rng=False, use_rule_old=False):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
         self.use_rule = use_rule
+        self.use_rule_old = use_rule_old
         self.use_cuda = use_cuda
         self.class_dict = class_dict
         self.class_list = class_list
