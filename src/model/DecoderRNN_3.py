@@ -206,9 +206,9 @@ class DecoderRNN_3(BaseRNN):
 
                 mask = torch.ones((decoder_input.size(0), len(self.class_list)))
                 for i in range(step_output.shape[0]):
-                    if di < (min_len[i]-1):
+                    if di < min_len[i]:
                         mask[i, self.filter_END()] = 1e-12
-                    elif di == (max_len[i]-1) + 1:
+                    elif di == max_len[i]:
                         if not ended[i]:
                             all_except_end = list(range(len(self.class_list)))
                             all_except_end.remove(self.filter_END())
