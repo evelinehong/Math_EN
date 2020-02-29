@@ -158,7 +158,7 @@ class DecoderRNN_3(BaseRNN):
         mask_digit = torch.ones((batch_size, len(self.class_list)))
         filters_digit = []
         for k,v in self.class_dict.items():
-            if 'temp' in k:
+            if 'temp' in k or 'PI' == k or k.isdigit():
                 filters_digit.append(v)
         filters_digit = np.array(filters_digit)
         mask_digit[:, filters_digit] = 1e-12
