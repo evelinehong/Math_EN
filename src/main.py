@@ -75,7 +75,8 @@ def step_one():
                            print_every = 10,
                            teacher_schedule = False,
                            checkpoint_dir_name = args.checkpoint_dir_name,
-                           fix_len = args.fix_len)
+                           fix_rng = args.fix_rng,
+                           use_rule = args.use_rule)
 
 
     print ('start training')
@@ -118,7 +119,7 @@ def step_one_test():
                                                      template_flag = True,
                                                      batch_size = 64,
                                                      evaluate_type = 0,
-                                                     use_rule = False,
+                                                     use_rule = args.use_rule,
                                                      mode = args.mode,
                                                      post_flag=args.post_flag,
                                                      name_save = name)
@@ -149,7 +150,7 @@ def step_three():
                                                      template_flag = False,
                                                      batch_size = 64,
                                                      evaluate_type = 0,
-                                                     use_rule = True,
+                                                     use_rule = args.use_rule,
                                                      mode = args.mode)
     print (test_temp_acc, test_ans_acc)
 

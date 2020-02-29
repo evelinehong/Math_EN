@@ -12,7 +12,7 @@ import pdb
 
 class SupervisedTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
-                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_len):
+                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule):
         self.vocab_dict = vocab_dict
         self.vocab_list = vocab_list
         self.decode_classes_dict = decode_classes_dict
@@ -30,7 +30,8 @@ class SupervisedTrainer(object):
         if self.cuda_use == True:
             self.loss.cuda()
 
-        self.fix_len = fix_len
+        self.fix_rng = fix_rng
+        self.use_rule = use_rule
 
         self.print_every = print_every
 
@@ -61,14 +62,14 @@ class SupervisedTrainer(object):
                                       template_flag = template_flag,
                                       teacher_forcing_ratio = teacher_forcing_ratio, 
                                       mode = mode,
-                                      use_rule = False,
+                                      use_rule = self.use_rule,
                                       use_cuda = self.cuda_use,
                                       vocab_dict = self.vocab_dict,
                                       vocab_list = self.vocab_list,
                                       class_dict = self.class_dict,
                                       class_list = self.class_list,
                                       num_list = num_list,
-                                      fix_len = self.fix_len)
+                                      fix_rng = self.fix_rng)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -205,7 +206,7 @@ class SupervisedTrainer(object):
                                                                 template_flag = True,
                                                                 batch_size = batch_size,
                                                                 evaluate_type = 0,
-                                                                use_rule = False,
+                                                                use_rule = self.use_rule,
                                                                 mode = mode,
                                                                 post_flag=post_flag)
             #valid_temp_acc, valid_ans_acc =\
@@ -215,7 +216,7 @@ class SupervisedTrainer(object):
             #                                                    template_flag = True,
             #                                                    batch_size = batch_size,
             #                                                    evaluate_type = 0,
-            #                                                    use_rule = False,
+            #                                                    use_rule = self.use_rule,
             #                                                    mode = mode,
             #                                                    post_flag=post_flag)
             test_temp_acc, test_ans_acc =\
@@ -225,7 +226,7 @@ class SupervisedTrainer(object):
                                                                 template_flag = True,
                                                                 batch_size = batch_size,
                                                                 evaluate_type = 0,
-                                                                use_rule = False,
+                                                                use_rule = self.use_rule,
                                                                 mode = mode,
                                                                 post_flag=post_flag)
             self.train_acc_list.append((epoch, step, train_ans_acc))

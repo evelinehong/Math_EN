@@ -18,7 +18,7 @@ class Seq2seq(nn.Module):
 
     def forward(self, input_variable, input_lengths=None, target_variable=None, template_flag=True,\
                 teacher_forcing_ratio=0, mode=0, use_rule=False, use_cuda=False, \
-                vocab_dict = None, vocab_list = None, class_dict=None, class_list=None, num_list=None, fix_len=False):
+                vocab_dict = None, vocab_list = None, class_dict=None, class_list=None, num_list=None, fix_rng=False):
         encoder_outputs, encoder_hidden = self.encoder(input_variable, input_lengths)
 
         encoder_hidden = self.process_gap_encoder_decoder(encoder_hidden, mode)
@@ -36,7 +36,7 @@ class Seq2seq(nn.Module):
                               class_dict = class_dict,
                               class_list = class_list,
                               num_list = num_list,
-                              fix_len = fix_len)
+                              fix_rng = fix_rng)
 
         return result
 

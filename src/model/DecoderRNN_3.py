@@ -139,7 +139,7 @@ class DecoderRNN_3(BaseRNN):
 
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                 max_length,  function, num_list, fix_len):
+                                                 max_length,  function, num_list, fix_rng):
         '''
         decoder_input: batch x 1
         decoder_output: batch x 1 x classes,  probility_log
@@ -187,17 +187,18 @@ class DecoderRNN_3(BaseRNN):
             step_output = decoder_output.squeeze(1)
             step_output = torch.exp(step_output)
 
-            if di % 2 == 0:
-                step_output = mask_op * step_output
-            else:
-                step_output = mask_digit * step_output
+            if self.use_rule:
+                if di % 2 == 0:
+                    step_output = mask_op * step_output
+                else:
+                    step_output = mask_digit * step_output
 
-            step_output = mask_temp * step_output
+                step_output = mask_temp * step_output
 
             # fixRng-like:
             # force EOS if twice num_list length,
             # force not EOS if less than half num_list length (make configurable?)
-            if fix_len and num_list is not None:
+            if fix_rng and num_list is not None:
                 mask = torch.ones((decoder_input.size(0), len(self.class_list)))
                 for i in range(step_output.shape[0]):
                     if di == len(num_list[i])*2:
@@ -226,7 +227,7 @@ class DecoderRNN_3(BaseRNN):
 
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, template_flag=True,\
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
-                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None, fix_len=False):
+                vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None, fix_rng=False):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
@@ -270,7 +271,7 @@ class DecoderRNN_3(BaseRNN):
             decoder_input = pad_var#.unsqueeze(1) # batch x 1
             #pdb.set_trace()
             return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                  max_length, function, num_list, fix_len)
+                                                  max_length, function, num_list, fix_rng)
 
 
     def rule(self, symbol):
