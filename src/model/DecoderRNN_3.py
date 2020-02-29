@@ -150,11 +150,12 @@ class DecoderRNN_3(BaseRNN):
         #attn_list = []
         decoder_hidden = decoder_init_hidden
 
-        mask_op = torch.ones((decoder_input.size(0),len(self.class_list)))
+        batch_size = decoder_input.size(0)
+        mask_op = torch.ones((batch_size, len(self.class_list)))
         filters_op = self.filter_op()
         mask_op[:,filters_op] = 1e-12
 
-        mask_digit = torch.ones((decoder_input.size(0),len(self.class_list)))
+        mask_digit = torch.ones((batch_size, len(self.class_list)))
         filters_digit = []
         for k,v in self.class_dict.items():
             if 'temp' in k:
@@ -162,7 +163,7 @@ class DecoderRNN_3(BaseRNN):
         filters_digit = np.array(filters_digit)
         mask_digit[:, filters_digit] = 1e-12
 
-        mask_temp = torch.ones((decoder_input.size(0),len(self.class_list)))
+        mask_temp = torch.ones((batch_size, len(self.class_list)))
 
         if self.use_cuda:
             mask_op = mask_op.cuda()
@@ -180,6 +181,7 @@ class DecoderRNN_3(BaseRNN):
                 filter_temp = np.array (filters_temp)
                 mask_temp[i, filters_temp] = 1e-12
 
+        ended = torch.zeros(batch_size, dtype=torch.bool)
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, function=function)
@@ -196,16 +198,21 @@ class DecoderRNN_3(BaseRNN):
                 step_output = mask_temp * step_output
 
             # fixRng-like:
-            # force EOS if twice num_list length,
+            # force EOS if greater than twice num_list length-1 (+2 for occasional constants)
             # force not EOS if less than half num_list length (make configurable?)
             if fix_rng and num_list is not None:
+                max_len = list(map(lambda ls: len(ls)*2-1 + 2, num_list))
+                min_len = list(map(lambda ls: len(ls) // 2, num_list))
+
                 mask = torch.ones((decoder_input.size(0), len(self.class_list)))
                 for i in range(step_output.shape[0]):
-                    if di == len(num_list[i])*2:
-                        mask[i, self.filter_END()] = 1
-                    elif di < len(num_list[i])/2:
-                        mask[i, :] = 1
+                    if di < (min_len[i]-1):
                         mask[i, self.filter_END()] = 1e-12
+                    elif di == (max_len[i]-1) + 1:
+                        if not ended[i]:
+                            all_except_end = list(range(len(self.class_list)))
+                            all_except_end.remove(self.filter_END())
+                            mask[i, all_except_end] = 1e-12
                 if self.use_cuda:
                     mask = mask.cuda()
                 step_output = mask * step_output
@@ -221,6 +228,8 @@ class DecoderRNN_3(BaseRNN):
 
             decoder_outputs_list.append(step_output)
             sequence_symbols_list.append(symbols)
+
+            ended = ended | (symbols.flatten().cpu() == self.class_dict['END_token']).bool()
 
         return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 
