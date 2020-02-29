@@ -13,6 +13,9 @@ from train import SupervisedTrainer, BackTrainer
 from model import EncoderRNN, DecoderRNN_1, DecoderRNN_2, DecoderRNN_3, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
+import wandb
+wandb.init(project="mwp")
+
 args = get_args()
 
 
@@ -62,6 +65,12 @@ def backsearch():
 
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
+
+    wandb.config.fix_rng = args.fix_rng
+    wandb.config.use_rule = args.use_rule
+    wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
+
+    wandb.watch(seq2seq)
 
     weight = torch.ones(data_loader.classes_len)
     pad = data_loader.decode_classes_dict['PAD_token']

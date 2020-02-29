@@ -10,6 +10,8 @@ from torch.autograd import Variable
 import torch.nn as nn
 import pdb
 
+import wandb
+
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -215,7 +217,7 @@ class SupervisedTrainer(object):
                 print_loss_total += loss
                 epoch_loss_total += loss
 
-                if step % self.print_every == 0 and step_elapsed > self.print_every:
+                if step % self.print_every == 0 and step_elapsed >= self.print_every:
                     print_loss_avg = print_loss_total / self.print_every
                     print_loss_total = 0
                     print ('step: %d, Progress: %d%%, Train %s: %.4f, Teacher_r: %.2f' % (
@@ -225,6 +227,7 @@ class SupervisedTrainer(object):
                            print_loss_avg,
                            teacher_forcing_ratio))
 
+                    wandb.log({"epoch": epoch, "avg loss": print_loss_avg}, step=step)
 
             model.eval()
             train_temp_acc, train_ans_acc =\
@@ -287,6 +290,12 @@ class SupervisedTrainer(object):
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
             print("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f, max_test_acc: %.2f" \
                   % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_ans_acc))
+
+            wandb.log({"epoch": epoch,
+                       "train temp accuracy": train_temp_acc,
+                       "train ans accuracy": train_ans_acc,
+                       "test temp accuracy": test_temp_acc,
+                       "test ans accuracy": test_ans_acc}, step=step)
 
 
     def train(self, model, data_loader, batch_size, n_epoch, template_flag, \
