@@ -184,15 +184,15 @@ class DecoderRNN_3(BaseRNN):
             step_output = decoder_output.squeeze(1)
             step_output = torch.exp(step_output)
 
-            mask = torch.ones((decoder_input.size(0), len(self.class_list)), dtype=torch.bool)
+            mask = torch.ones((decoder_input.size(0), len(self.class_list)))
 
             if self.use_rule:
                 if di % 2 == 0:
-                    mask = mask & mask_op
+                    mask = mask * mask_op
                 else:
-                    mask = mask & mask_digit
+                    mask = mask * mask_digit
 
-                mask = mask & mask_temp
+                mask = mask * mask_temp
 
             # fixRng-like:
             # force EOS if greater than twice num_list length-1 (+2 for occasional constants)
@@ -210,8 +210,8 @@ class DecoderRNN_3(BaseRNN):
                             all_except_end = list(range(len(self.class_list)))
                             all_except_end.remove(self.filter_END())
                             mask_rng[i, all_except_end] = 0
-                mask = mask & mask_rng
-
+                mask = mask * mask_rng
+                
             mask[mask == 0] = 1e-12
 
             if self.use_cuda:
