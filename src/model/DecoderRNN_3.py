@@ -164,7 +164,7 @@ class DecoderRNN_3(BaseRNN):
         mask_digit[:, filters_digit] = 0
 
         mask_temp = torch.ones((batch_size, len(self.class_list)), dtype=torch.bool)
-
+        
         if num_list is not None:
             for i in range (len(num_list)):
                 filters_temp = []
@@ -186,6 +186,13 @@ class DecoderRNN_3(BaseRNN):
 
             mask = torch.ones((decoder_input.size(0), len(self.class_list)))
 
+            mask_pad = torch.ones((decoder_input.size(0), len(self.class_list)), dtype=torch.bool)
+            for i in range (step_output.shape[0]):
+                if ended[i]:
+                    all_except_pad = list(range(len(self.class_list)))
+                    all_except_pad.remove(self.filter_PAD())
+                    mask_pad[i, all_except_pad] = 0 
+
             if self.use_rule:
                 if di % 2 == 0:
                     mask = mask * mask_op
@@ -193,6 +200,7 @@ class DecoderRNN_3(BaseRNN):
                     mask = mask * mask_digit
 
                 mask = mask * mask_temp
+                mask = mask * mask_pad
 
             # fixRng-like:
             # force EOS if greater than twice num_list length-1 (+2 for occasional constants)
@@ -332,6 +340,11 @@ class DecoderRNN_3(BaseRNN):
     def filter_END(self):
         filters = []
         filters.append(self.class_dict['END_token'])
+        return np.array(filters)
+    
+    def filter_PAD(self):
+        filters = []
+        filters.append(self.class_dict['PAD_token'])
         return np.array(filters)
 
 
