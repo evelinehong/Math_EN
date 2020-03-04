@@ -291,7 +291,7 @@ class BackTrainer(object):
                 else:
                     break
 
-            self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), target)
+            self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), fix_step)
             non_padding = target.ne(pad_in_classes_idx)
 
             correct = fix_step.eq(target).masked_select(non_padding).sum().item()#data[0]
