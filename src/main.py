@@ -7,14 +7,161 @@ from torch.autograd import Variable
 import torch.nn as nn
 
 from utils import DataLoader
-from train import SupervisedTrainer
-from model import EncoderRNN, DecoderRNN_1, DecoderRNN_2, DecoderRNN_3, Seq2seq
+from train import SupervisedTrainer, RLTrainer, BackTrainer
+from model import EncoderRNN, DecoderRNN_1, DecoderRNN_2, DecoderRNN_3, DecoderRNN_RL, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
 args = get_args()
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+def reinforce():
+    if args.mode == 0:
+        encoder_cell = 'lstm'
+        decoder_cell = 'lstm'
+    elif args.mode == 1:
+        encoder_cell = 'gru'
+        decoder_cell = 'gru'
+    elif args.mode == 2:
+        encoder_cell = 'gru'
+        decoder_cell = 'lstm'
+    else:
+        encoder_cell = 'lstm'
+        decoder_cell = 'gru'
+
+    data_loader = DataLoader(args)
+    embed_model = nn.Embedding(data_loader.vocab_len, 128)
+    #embed_model.weight.data.copy_(torch.from_numpy(data_loader.word2vec.emb_vectors))
+    encode_model = EncoderRNN(vocab_size = data_loader.vocab_len,
+                              embed_model = embed_model,
+                              emb_size = 128,
+                              hidden_size = 512,
+                              input_dropout_p = 0.3,
+                              dropout_p = 0.4,
+                              n_layers = 2,
+                              bidirectional = True,
+                              rnn_cell = None,
+                              rnn_cell_name = encoder_cell,
+                              variable_lengths = True)
+    decode_model = DecoderRNN_RL(vocab_size = data_loader.vocab_len,
+                                class_size = data_loader.classes_len,
+                                embed_model = embed_model,
+                                emb_size = 128,
+                                hidden_size = 1024,
+                                n_layers = 2,
+                                rnn_cell = None,
+                                rnn_cell_name=decoder_cell,
+                                sos_id = data_loader.vocab_dict['END_token'],
+                                eos_id = data_loader.vocab_dict['END_token'],
+                                input_dropout_p = 0.3,
+                                dropout_p = 0.4)
+    seq2seq = Seq2seq(encode_model, decode_model)
+
+    if args.cuda_use:
+        seq2seq = seq2seq.cuda()
+
+    weight = torch.ones(data_loader.classes_len)
+    pad = data_loader.decode_classes_dict['PAD_token']
+    loss = NLLLoss(weight, pad)
+
+    st = RLTrainer(vocab_dict = data_loader.vocab_dict,
+                           vocab_list = data_loader.vocab_list,
+                           decode_classes_dict = data_loader.decode_classes_dict,
+                           decode_classes_list = data_loader.decode_classes_list,
+                           cuda_use = args.cuda_use,
+                           loss = loss,
+                           print_every = 10,
+                           teacher_schedule = False,
+                           checkpoint_dir_name = args.checkpoint_dir_name,
+                           fix_rng = args.fix_rng,
+                           use_rule = args.use_rule)
+
+
+    print ('start training')
+    st.train(model = seq2seq, 
+             data_loader = data_loader,
+             batch_size = 256,
+             n_epoch = 2000,
+             template_flag = True,
+             resume = args.resume,
+             optimizer = None,
+             mode = args.mode,
+             teacher_forcing_ratio=args.teacher_forcing_ratio,
+             post_flag = args.post_flag)
+
+def backsearch():
+    if args.mode == 0:
+        encoder_cell = 'lstm'
+        decoder_cell = 'lstm'
+    elif args.mode == 1:
+        encoder_cell = 'gru'
+        decoder_cell = 'gru'
+    elif args.mode == 2:
+        encoder_cell = 'gru'
+        decoder_cell = 'lstm'
+    else:
+        encoder_cell = 'lstm'
+        decoder_cell = 'gru'
+
+    data_loader = DataLoader(args)
+    embed_model = nn.Embedding(data_loader.vocab_len, 128)
+    #embed_model.weight.data.copy_(torch.from_numpy(data_loader.word2vec.emb_vectors))
+    encode_model = EncoderRNN(vocab_size = data_loader.vocab_len,
+                              embed_model = embed_model,
+                              emb_size = 128,
+                              hidden_size = 512,
+                              input_dropout_p = 0.3,
+                              dropout_p = 0.4,
+                              n_layers = 2,
+                              bidirectional = True,
+                              rnn_cell = None,
+                              rnn_cell_name = encoder_cell,
+                              variable_lengths = True)
+    decode_model = DecoderRNN_RL(vocab_size = data_loader.vocab_len,
+                                class_size = data_loader.classes_len,
+                                embed_model = embed_model,
+                                emb_size = 128,
+                                hidden_size = 1024,
+                                n_layers = 2,
+                                rnn_cell = None,
+                                rnn_cell_name=decoder_cell,
+                                sos_id = data_loader.vocab_dict['END_token'],
+                                eos_id = data_loader.vocab_dict['END_token'],
+                                input_dropout_p = 0.3,
+                                dropout_p = 0.4)
+    seq2seq = Seq2seq(encode_model, decode_model)
+
+    if args.cuda_use:
+        seq2seq = seq2seq.cuda()
+
+    weight = torch.ones(data_loader.classes_len)
+    pad = data_loader.decode_classes_dict['PAD_token']
+    loss = NLLLoss(weight, pad)
+
+    st = BackTrainer(vocab_dict = data_loader.vocab_dict,
+                           vocab_list = data_loader.vocab_list,
+                           decode_classes_dict = data_loader.decode_classes_dict,
+                           decode_classes_list = data_loader.decode_classes_list,
+                           cuda_use = args.cuda_use,
+                           loss = loss,
+                           print_every = 10,
+                           teacher_schedule = False,
+                           checkpoint_dir_name = args.checkpoint_dir_name,
+                           fix_rng = args.fix_rng,
+                           use_rule = args.use_rule)
+
+
+    print ('start training')
+    st.train(model = seq2seq, 
+             data_loader = data_loader,
+             batch_size = 256,
+             n_epoch = 200,
+             template_flag = True,
+             resume = args.resume,
+             optimizer = None,
+             mode = args.mode,
+             teacher_forcing_ratio=args.teacher_forcing_ratio,
+             post_flag = args.post_flag)
 
 def step_one():
 
@@ -163,5 +310,9 @@ if __name__ == "__main__":
         step_three()
     elif args.run_flag == 'train_23k':
         step_one()
+    elif args.run_flag == 'reinforce':
+        reinforce()
+    elif args.run_flag == 'backsearch':
+        backsearch()
     else:
         print ('emmmm..................')
