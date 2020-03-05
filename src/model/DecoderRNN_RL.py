@@ -196,9 +196,13 @@ class DecoderRNN_RL(BaseRNN):
             mask_pad = torch.ones((decoder_input.size(0), len(self.class_list)), dtype=torch.bool)
             for i in range (step_output.shape[0]):
                 if ended[i]:
-                    all_except_pad = list(range(len(self.class_list)))
-                    all_except_pad.remove(self.filter_PAD())
-                    mask_pad[i, all_except_pad] = 0 
+                    # all_except_pad = list(range(len(self.class_list)))
+                    # all_except_pad.remove(self.filter_PAD())
+                    # mask_pad[i, all_except_pad] = 0
+                    pass
+                else:
+                    filter_pad = self.filter_PAD()
+                    mask_pad[i, filter_pad] = 0 
 
             mask_end = torch.ones((decoder_input.size(0), len(self.class_list)), dtype=torch.bool)
             for i in range (step_output.shape[0]):
