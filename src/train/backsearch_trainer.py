@@ -3,7 +3,7 @@ import random
 import numpy as np
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
-from .diagnosis_multistep import ExprTree
+#from .diagnosis_multistep import ExprTree
 
 import torch
 from torch import optim
@@ -43,29 +43,30 @@ class BackTrainer(object):
 
         Checkpoint.CHECKPOINT_DIR_NAME = checkpoint_dir_name
 
-    def find_fix(self, preds, gts, all_probs, gt_exprs, num_lists):
-        best_fix_list = []
-        new_dict = {}
-        for k,v in self.class_dict.items():
-            if not 'END' in k and not 'PAD' in k:
-                new_dict[k] = v - 2
-
-        for pred, gt, all_prob, gt_expr, num_list in zip(preds, gts, all_probs, gt_exprs, num_lists):
-
+    def find_fix_once(self, num_list, new_dict, pred, all_prob, gt):
+        fix = []
+        if 'END_token' in pred and len (pred) < 14:
+            for op in ["+", "-", "*", "/", "^"]:
+                try:
+                    pred = pred.tolist()
+                except:
+                    pass
+                pred_new = pred.copy()
+                pred_new[pred.index('END_token')] = op
+                fix = self.find_fix_once(num_list, new_dict, pred_new, all_prob, gt)
+                if len(fix):
+                    return fix
+                    break
+        else:
             fix = []
-            if len(pred):
-                if len(pred) %2 == 0:
-                    pred.pop()
-                    all_prob = all_prob[:len(pred)]
-                #     print (output[0]
-                etree = ExprTree(num_list, new_dict)
-        #         expr_str = [ for x in gt_expr]
-                
-                tokens = list(zip(pred, all_prob))
+    #         etree = ExprTree(num_list, new_dict)
+    # #         expr_str = [ for x in gt_expr]
+            
+    #         tokens = list(zip(pred, all_prob))
 
-                etree.parse(tokens, num_list, self.class_list[2:], new_dict)
-
-                if (etree.res()[0] -  gt) < 1e-2:
+    #         etree.parse(tokens, num_list, self.class_list[2:], new_dict)
+            try:
+                if abs(eval((''.join(pred)).replace('^','**')) -  gt) < 1e-5:
                     for x in pred:
                         temp = x
                         if x[0].isdigit() and x != '3.14':
@@ -77,9 +78,8 @@ class BackTrainer(object):
                         elif x == '3.14':
                             temp = 'PI'
                         fix.append (self.class_dict[temp])
-                else:
-
-                    output = etree.fix(gt, n_step=1)
+                else:                   
+                    #output = etree.fix(gt, n_step=1)
                     # if output is not None:
                     #     output_expr = ''.join(output[0])
                     #     print(output_expr, eval(output_expr), output[1])
@@ -90,9 +90,10 @@ class BackTrainer(object):
                     # gt_expr = ''.join([id2sym(x) for x in gt_expr])
                     # print(gt_expr, eval(gt_expr), gt_prob)
                     # input()
-                    
-                    if output:
-                        for x in output[0]:
+                    output = self.diagnosis (pred, num_list, gt)
+                    if len(output):
+                        for x in output:
+
                             temp = x
                             if x[0].isdigit() and x != '3.14':
                                 i = 0
@@ -103,8 +104,58 @@ class BackTrainer(object):
                             elif x == '3.14':
                                 temp = 'PI'
                             fix.append (self.class_dict[temp])
-            best_fix_list.append(fix)
+                        return fix
+            except:
+                pass
 
+        return fix
+
+    def diagnosis(self, pred, num_list, gt):
+        output = []
+        for i in range(0, len(pred)):
+            if pred[i][0].isdigit():
+                for num in num_list:
+                    pred_new = pred.copy()
+                    pred_new[i] = str(num)
+                    try:
+                        if (abs(eval((''.join(pred_new)).replace('^','**')) -  gt) < 1e-5):                 
+                            return pred_new
+                    except:
+                        pass
+            elif pred[i] in ["+", "-", "*", "/", "^"]:
+                for op in ["+", "-", "*", "/", "^"]:
+                    pred_new = pred.copy()
+                    pred_new[i] = op
+                    try:
+                        if (abs(eval((''.join(pred_new)).replace('^','**')) -  gt) < 1e-5): 
+                            return pred_new 
+                    except:
+                        pass           
+        return output
+
+    def find_fix(self, preds, gts, all_probs, gt_exprs, num_lists):
+        best_fix_list = []
+        new_dict = {}
+        for k,v in self.class_dict.items():
+            if not 'END' in k and not 'PAD' in k:
+                new_dict[k] = v - 2
+
+        for pred, gt, all_prob, gt_expr, num_list in zip(preds, gts, all_probs, gt_exprs, num_lists):
+            fix = []
+            if len(pred) %2 == 0:
+                pred.pop()
+                all_prob = all_prob[:len(pred)]
+            #     print (output[0]
+
+            old_pred = pred.copy()
+            
+            fix = self.find_fix_once(num_list, new_dict, pred, all_prob, gt)
+            if len(old_pred) < 14 and not len(fix):
+                for i in range (len(old_pred)-1, -1, -1):
+                    if i % 2 == 1 and not len(fix):
+                        pred = pred[:i]
+                        fix = self.find_fix_once(num_list, new_dict, pred, all_prob, gt)
+            best_fix_list.append(fix)
         return best_fix_list
 
     def _convert_f_e_2_d_sybmbol(self, target_variable):
@@ -155,8 +206,10 @@ class BackTrainer(object):
                 break
             equ_list.append(self.decode_classes_list[idx])
         equ_list = self.inverse_temp_to_num_(equ_list, num_list)
+
         try:
-            equ_list = equ_list[:equ_list.index('END_token')]
+            index = len(equ_list) - 1 - equ_list[::-1].index('END_token')
+            equ_list = equ_list[:index]
         except:
             pass
         return equ_list
@@ -167,9 +220,7 @@ class BackTrainer(object):
 
         equ_string = ''
         for equ in equ_list:
-            if equ.endswith(".0"):
-                equ_string += equ[:-2]
-            elif equ == "^":
+            if equ == "^":
                 equ_string += "**"
             else:
                 equ_string += equ
@@ -281,22 +332,28 @@ class BackTrainer(object):
                         fix_step[i] = self.class_dict['END_token']
                     else:
                         fix_step[i] = self.class_dict['PAD_token']
-                if target[i].item() != pad_in_classes_idx  and \
-                              target[i].item() == fix_step[i].item():
-                    continue
-                    #elif target_variables[i][j].data[0] == 1:
-                elif target[i].item() == 1:
-                    right += 1
-                    break
-                else:
-                    break
+                
 
             self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), fix_step)
             non_padding = target.ne(pad_in_classes_idx)
 
-            correct = fix_step.eq(target).masked_select(non_padding).sum().item()#data[0]
+            correct = seq[step].eq(target).masked_select(non_padding).sum().item()#data[0]
             match += correct
-            total += non_padding.sum().item()#.data[0]       
+            total += non_padding.sum().item()#.data[0]   
+
+            for i in range(batch_size):
+                for j in range(target_variables.size(1)):
+                    #if target_variables[i][j].data[0] != pad_in_classes_idx  and \
+                                #target_variables[i][j].data[0] == seq_var[i][j].data[0]:
+                    if target_variables[i][j].item() != pad_in_classes_idx  and \
+                                target_variables[i][j].item() == seq_var[i][j].item():
+                        continue
+                    #elif target_variables[i][j].data[0] == 1:
+                    elif target_variables[i][j].item() == 1:
+                        right += 1
+                        break
+                    else:
+                        break    
         model.zero_grad()
         self.loss.backward()
         self.optimizer.step()
