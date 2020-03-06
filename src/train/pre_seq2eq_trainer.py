@@ -4,11 +4,26 @@ import numpy as np
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
+from .diagnosis_multistep import ExprTree
+
 import torch
 from torch import optim
 from torch.autograd import Variable
 import torch.nn as nn
 import pdb
+
+def inverse_temp_to_num(elem, num_list_single):
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    if 'temp' in elem:
+        index = alphabet.index(elem[-1])
+        return num_list_single[index]
+    elif 'PI' == elem:
+        return 3.14
+    elif elem.isdigit():
+        return int(elem)
+    else:
+        return elem
+
 
 class SupervisedTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
@@ -39,6 +54,53 @@ class SupervisedTrainer(object):
 
         Checkpoint.CHECKPOINT_DIR_NAME = checkpoint_dir_name
 
+    def find_fix(self, preds, gts, all_probs, num_list):
+        """
+        preds: batch_size * expr len                 int - predicted ids
+        res: batch_size                              float - labeled correct result
+        probs: batch_size * expr len * classes       float - predicted all probabilities
+        num_list: batch_size * list
+        """
+        class_list_expr = self.class_list[2:]
+
+        best_fix_list = []
+        for pred, gt, all_prob, num_list_single in zip(preds, gts, all_probs, num_list):
+            l = pred.tolist().index(self.class_dict['END_token'])
+
+            pred = pred[:l]
+            all_prob = all_prob[:,2:]
+            expr_tree_pred = [x-2 for x in pred] # convert index
+            # prob = all_prob[range(l), pred]
+            #pred_str = [id2sym(x) for x in pred]
+
+            tokens = list(zip(expr_tree_pred, all_prob))
+            etree = ExprTree(num_list_single, class_list_expr)
+            etree.parse(tokens)
+            fix = []
+            if abs(etree.res()[0] - gt) <= 1e-5:
+                fix = list(pred)
+                new_temp = [self.class_list[id] for id in fix]
+                new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+                print(f"No fix needed: {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
+            else:
+                output = etree.fix(gt)
+                if output:
+                    fix = [int(x+2) for x in output[0]]
+
+                    old_temp = [self.class_list[id] for id in pred]
+                    old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+
+                    new_ids = fix
+                    new_temp = [self.class_list[id] for id in new_ids]
+                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+
+                    print(f"Fix found: {''.join(old_str)} ({''.join(old_temp)})"
+                          f"=> {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
+                    print(output)
+
+            best_fix_list.append(fix)
+        return best_fix_list
+
         
     def _convert_f_e_2_d_sybmbol(self, target_variable):
         new_variable = []
@@ -54,7 +116,9 @@ class SupervisedTrainer(object):
 
 
     def _train_batch(self, input_variables, input_lengths,target_variables, target_lengths, model,\
-                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list):
+                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions):
+        # decoder_outputs: expr_len (list) * batch_size * classes
+        # symbols_list: expr_len (list) * batch_size * 1
         decoder_outputs, decoder_hidden, symbols_list = \
                                       model(input_variable = input_variables, 
                                       input_lengths = input_lengths, 
@@ -86,12 +150,38 @@ class SupervisedTrainer(object):
         seq_var = torch.cat(seq, 1)
 
         self.loss.reset()
+
+        probs = torch.stack(decoder_outputs, dim=1) # batch_size * expr_len * classes
+        preds = torch.stack(symbols_list, dim=1).squeeze(2) # batch_size * expr_len
+        preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
+        res = solutions
+
+        fix_list = self.find_fix(
+            preds.data.cpu().numpy(),
+            res,
+            probs.data.cpu().numpy(),
+            num_list)
+
         for step, step_output in enumerate(decoder_outputs):
-            # cuda step_output = step_output.cuda()
+            fixed_step = torch.full((batch_size,), -1, dtype=torch.long) #-1 ignored in NLLLoss
+            for i in range(batch_size):
+                if len(fix_list[i]):
+                    if step < len(fix_list[i]):
+                        fixed_step[i] = torch.tensor(fix_list[i][step])
+                    elif step == len(fix_list[i]):
+                        fixed_step[i] = self.class_dict['END_token']
+                    else:
+                        fixed_step[i] = self.class_dict['PAD_token']
+
             if self.cuda_use:
                 step_output = step_output.cuda()
+                fixed_step = fixed_step.cuda()
+
+            # loss wrt fixed output
+            self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), fixed_step)
+
+            # target not used in training, only metric:
             target = target_variables[:, step]
-            self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), target)
             non_padding = target.ne(pad_in_classes_idx)
             correct = seq[step].view(-1).eq(target).masked_select(non_padding).sum().item()#data[0]
             match += correct
@@ -156,7 +246,8 @@ class SupervisedTrainer(object):
                 input_lengths = batch_data_dict['batch_encode_len']
                 target_variables = batch_data_dict['batch_decode_pad_idx']
                 target_lengths = batch_data_dict['batch_decode_len']
-                num_list = batch_data_dict['batch_num_list']                
+                num_list = batch_data_dict['batch_num_list']
+                solutions = batch_data_dict['batch_solution']
 
                 #cuda
                 input_variables = Variable(torch.LongTensor(input_variables))
@@ -176,7 +267,8 @@ class SupervisedTrainer(object):
                                                    mode = mode, 
                                                    batch_size = batch_size,
                                                    post_flag = post_flag,
-                                                   num_list = num_list)
+                                                   num_list = num_list,
+                                                   solutions = solutions)
 
 
                 right_count += com_list[0]
@@ -188,7 +280,7 @@ class SupervisedTrainer(object):
                 print_loss_total += loss
                 epoch_loss_total += loss
 
-                if step % self.print_every == 0 and step_elapsed > self.print_every:
+                if step % self.print_every == 0 and step_elapsed >= self.print_every:
                     print_loss_avg = print_loss_total / self.print_every
                     print_loss_total = 0
                     print ('step: %d, Progress: %d%%, Train %s: %.4f, Teacher_r: %.2f' % (
@@ -197,7 +289,6 @@ class SupervisedTrainer(object):
                            self.loss.name,
                            print_loss_avg,
                            teacher_forcing_ratio))
-
 
             model.eval()
             train_temp_acc, train_ans_acc =\
@@ -238,17 +329,20 @@ class SupervisedTrainer(object):
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
 
+            checkpoint = Checkpoint(model=model,
+                                    optimizer=self.optimizer,
+                                    epoch=epoch,
+                                    step=step,
+                                    train_acc_list=self.train_acc_list,
+                                    test_acc_list=self.test_acc_list,
+                                    loss_list=self.loss_list)
+            checkpoint.save_according_name("./experiment", "latest")
+
             if test_ans_acc > max_ans_acc:
-               max_ans_acc = test_ans_acc
-               th_checkpoint = Checkpoint(model=model,
-                                          optimizer=self.optimizer,
-                                          epoch=epoch,
-                                          step=step,
-                                          train_acc_list = self.train_acc_list,
-                                          test_acc_list = self.test_acc_list,
-                                          loss_list = self.loss_list).\
-                                            save_according_name("./experiment", 'best')
-               print(f"Checkpoint saved! max acc: {max_ans_acc}")
+                max_ans_acc = test_ans_acc
+                checkpoint.save_according_name("./experiment", 'best')
+                print(f"Checkpoint best saved! max acc: {max_ans_acc}")
+
 
             #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
@@ -265,7 +359,7 @@ class SupervisedTrainer(object):
                                    loss = NLLLoss(),
                                    cuda_use = self.cuda_use)
         if resume:
-            checkpoint_path = Checkpoint.get_certain_checkpoint("./experiment", "best")
+            checkpoint_path = Checkpoint.get_certain_checkpoint("./experiment", "latest")
             resume_checkpoint = Checkpoint.load(checkpoint_path)
             model = resume_checkpoint.model
             self.optimizer = resume_checkpoint.optimizer
