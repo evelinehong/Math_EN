@@ -2,19 +2,30 @@ from utils import *
 import numpy as np
 import queue as Q
 import math
+
+DEBUG = False
+
 sym2priority = {'+': 0, '-': 0, '*': 1, '/': 1, "^": 1}
 #sym2priority.update({str(x):2 if x.isdigit()})
 
-plus = lambda x,y: x + y
-minus = lambda x,y: x - y
-times = lambda x,y: x * y
-divide = lambda x,y: x / (y + 1e-7)
-exp = lambda x,y: x ** y
-root = lambda x,y: x ** (1/(y+1e-7))
+NAN_THRESHOLD = 10e7
+thres_nan = lambda x: x if abs(x) < NAN_THRESHOLD else float('nan')
+plus = lambda x,y: thres_nan(x + y)
+minus = lambda x,y: thres_nan(x - y)
+times = lambda x,y: thres_nan(x * y)
+divide = lambda x,y: thres_nan(x / y if y != 0 else float('nan'))
+exp = lambda x,y: thres_nan(x ** y)
+root = lambda x,y: thres_nan(exp(x, divide(1, y)))
+log = lambda x,base: thres_nan(math.log(x, base) if base != 0 and base != 1 and x > 0 else float('nan'))
 symbol2semantic= {'+': plus, '-': minus, '*': times, '/': divide, '^': exp}
 #symbol2semantic.update({x: eval(x) if x.isdigit()})
-inverse_op = {'+': minus, '-': plus, '*': divide, '/': times, '^': root}
-
+inverse_op_left = {'+': minus, '-': plus, '*': divide, '/': times, '^': root}
+inverse_op_right = {
+    '+': minus,
+    '-': lambda target, left: minus(left, target),
+    '*': divide,
+    '/': lambda target, left: divide(left, target),
+    '^': log}
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -178,15 +189,14 @@ class ExprTree:
 
     def find_valid_change(self, node, target):
         if isinstance(node, LeafNode):
-            target = round(target, 3)
             temp_diff = np.array([abs(target - num) for num in self.num_list_single])
             if np.any(temp_diff < 1e-5):
                 target_idx = np.where(temp_diff < 1e-5)[0]
                 target_id = self.class_list_expr.index('temp_' + (chr(ord('a') + target_idx)))
-                change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target))
+                change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
             elif abs(target - 3.14) < 1e-5:
                 target_id = self.class_list_expr.index('PI')
-                change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target))
+                change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
             else:
                 change = None
         else:
@@ -203,35 +213,43 @@ class ExprTree:
         while not queue.empty():
             change = queue.get()
             prob = change.priority
-            node, target = change.item
+            node, target, *rest = change.item
             if isinstance(node, LeafNode):
                 # print('find a fix, early stop.')
-                if str(target).isnumeric():
-                    temp_diff = np.array([abs(target - num) for num in self.num_list_single])
-                    if np.any(temp_diff < 1e-5) or abs(target - 3.14) < 1e-5:
-                        find_fix = True
-                        break
+                token_id = self.tokens.index(node)
+
+                if len(change.item) >= 3: # if target_id exists
+                    target_id = change.item[2]
+                    new_ids = old_ids.copy()
+                    new_ids[token_id] = target_id
+                    return (new_ids, self.root.res()[1] - prob)
                 else:
-                    find_fix = True
-                    break
+                    return None
 
             left = node.left
             right = node.right
             op = node.op
 
             # change left
-            sub_target = inverse_op[op.symbol](target, right.res()[0])
+            sub_target = inverse_op_left[op.symbol](target, right.res()[0])
             change = self.find_valid_change(left, sub_target)
-            if change != None:
+            if change is not None:
+                if DEBUG and len(change.item) >= 3:
+                    changed_token_ids = old_ids.copy()
+                    changed_token_ids[self.tokens.index(left)] = change.item[2]
+                    print(f"    try change left: {self.token_id_list_to_str(changed_token_ids)}")
+
                 queue.put(change)
 
             # change right
-            if op.symbol in ['+', '*']:
-                sub_target = inverse_op[op.symbol](target, left.res()[0])
-            else:
-                sub_target = op.res()[0](left.res()[0], target)
+            sub_target = inverse_op_right[op.symbol](target, left.res()[0])
             change = self.find_valid_change(right, sub_target)
-            if change != None:
+            if change is not None:
+                if DEBUG and len(change.item) >= 3:
+                    changed_token_ids = old_ids.copy()
+                    changed_token_ids[self.tokens.index(right)] = change.item[2]
+                    print(f"    try change right: {self.token_id_list_to_str(changed_token_ids)}")
+
                 queue.put(change)
 
             # change op
@@ -252,31 +270,11 @@ class ExprTree:
                 except:
                     pass
 
-        if find_fix:
-            token_id = self.tokens.index(node)
-
-            new_ids = old_ids.copy()
-
-            if not isinstance(target, str): #numeric
-                target = round(target, 3)
-                temp_diff = np.array([abs(target - num) for num in self.num_list_single])
-                target_sym = new_ids[token_id]
-                if np.any(temp_diff < 1e-5):
-                    target_idx = np.where(temp_diff < 1e-5)[0]
-                    target_sym = self.class_list_expr.index('temp_' + (chr(ord('a') + target_idx)))
-                elif abs(target - 3.14) < 1e-5:
-                    target_sym = self.class_list_expr.index('PI')
-
-                new_ids[token_id] = target_sym
-            else:
-                new_ids[token_id] = self.class_list_expr.index(target)
-
-            if new_ids != old_ids:
-                return (new_ids, self.root.res()[1])
         return None
 
     def fix(self, gt, n_step=1):
-        print(f"fixing: goal is {gt}")
+        if DEBUG:
+            print(f"fixing: goal is {gt}, num_list: {self.num_list_single}")
         entropy_list = np.array([x.entropy() for x in self.tokens])
         entropy_list = entropy_list / entropy_list.sum()
         # print([x.symbol for x in self.tokens])
@@ -303,9 +301,8 @@ class ExprTree:
                             self.tokens[tok_id].resume()
                 self.parse()
 
-            cur_temp = [self.class_list_expr[tok.symbol_id] for tok in self.tokens]
-            cur_str = [str(x) for x in [inverse_temp_to_num(temp, self.num_list_single) for temp in cur_temp]]
-            print(f"  fix step {i}: try {cur_str}")
+            if DEBUG:
+                print(f"  fix step {i}: start with {self.token_list_to_str()[0]}")
 
             fix = self.fix_1step(gt)
             if fix is not None:
@@ -313,6 +310,16 @@ class ExprTree:
 
                 # print([x.symbol for x in self.tokens])
         return None
+
+    def token_list_to_str(self, tokens=None):
+        if tokens is None:
+            tokens = self.tokens
+        return self.token_id_list_to_str([tok.symbol_id for tok in tokens])
+
+    def token_id_list_to_str(self, token_ids):
+        cur_temp = [self.class_list_expr[tok_id] for tok_id in token_ids]
+        cur_str = [str(x) for x in [inverse_temp_to_num(temp, self.num_list_single) for temp in cur_temp]]
+        return (cur_temp, cur_str)
 
     def fix_bak(self, gt, n_step=1):
         entropy_list = np.array([x.entropy() for x in self.tokens])

@@ -12,6 +12,8 @@ from torch.autograd import Variable
 import torch.nn as nn
 import pdb
 
+DEBUG = False
+
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
     if 'temp' in elem:
@@ -87,7 +89,8 @@ class BackTrainer(object):
                 fix = list(pred)
                 new_temp = [self.class_list[id] for id in fix]
                 new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
-                print(f"No fix needed: {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
+                if DEBUG:
+                    print(f"No fix needed: {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
             else:
                 output = etree.fix(gt, n_step=n_step)
                 if output:
@@ -100,9 +103,10 @@ class BackTrainer(object):
                     new_temp = [self.class_list[id] for id in new_ids]
                     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
 
-                    print(f"  Fix found: {''.join(old_str)} ({''.join(old_temp)})"
-                          f"=> {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
-                    print(output)
+                    if DEBUG:
+                        print(f"  Fix found: {''.join(old_str)} ({''.join(old_temp)})"
+                              f"=> {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
+                        print(f"  {output}")
 
             best_fix_list.append(fix)
         return best_fix_list
