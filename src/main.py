@@ -75,7 +75,8 @@ def backsearch():
                    teacher_schedule = False,
                    checkpoint_dir_name = args.checkpoint_dir_name,
                    fix_rng = args.fix_rng,
-                   use_rule = args.use_rule)
+                   use_rule = args.use_rule,
+                   n_step=args.n_step)
 
 
     print ('start training')

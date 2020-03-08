@@ -34,19 +34,34 @@ class LeafNode:
         self.symbol_id = symbol_id
         self.all_prob = all_prob - np.log(np.sum(np.exp(all_prob)))
         self.class_list_expr = class_list_expr
-        self.symbol = self.class_list_expr[self.symbol_id]
         self.num_list_single = num_list_single
         self.initialize()
 
-    def initialize(self):
-        self.priority = sym2priority[self.symbol] if self.symbol in sym2priority else 2
-        self.prob = self.all_prob[self.symbol_id]
-        self.max_prob = self.all_prob.max()
-        self.parent = None
+    @property
+    def symbol(self):
+        return self.class_list_expr[self.symbol_id]
+
+    @property
+    def priority(self):
+        return sym2priority[self.symbol] if self.symbol in sym2priority else 2
+
+    @property
+    def prob(self):
+        return self.all_prob[self.symbol_id]
+
+    @property
+    def max_prob(self):
+        return self.all_prob.max()
+
+    @property
+    def _res(self):
         if self.symbol in symbol2semantic:
-            self._res = symbol2semantic[self.symbol]
+            return symbol2semantic[self.symbol]
         else:
-            self._res = inverse_temp_to_num(self.symbol, self.num_list_single)
+            return inverse_temp_to_num(self.symbol, self.num_list_single)
+
+    def initialize(self):
+        self.parent = None
 
     def res(self):
         return [self._res, self.prob, self.max_prob]
@@ -57,16 +72,18 @@ class LeafNode:
     def sample(self):
         # self.all_prob[self.symbol_id] = np.log(1e-30)
         # self.all_prob = self.all_prob - np.log(np.sum(np.exp(self.all_prob)))
-        all_prob = np.exp(self.all_prob)
+        all_prob_except_prev = self.all_prob.copy()
+        all_prob_except_prev[self.symbol_id] = np.log(1e-30)
+        all_prob = np.exp(all_prob_except_prev)
         all_prob /= all_prob.sum()
         new_symbol = np.random.choice(range(len(self.class_list_expr)), p=all_prob)
-        self.prev_symbol = self.symbol_id
+        self.prev_symbol_id = self.symbol_id
         self.symbol_id = new_symbol
         self.initialize()
         return self.symbol_id
 
     def resume(self):
-        self.symbol_id = self.prev_symbol
+        self.symbol_id = self.prev_symbol_id
         self.initialize()
 
 
@@ -100,7 +117,7 @@ class Node:
 
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, List
 
 
 @dataclass(order=True)
@@ -113,7 +130,7 @@ class ExprTree:
     def __init__(self, num_list_single, class_list_expr):
         self.class_list_expr = class_list_expr
         self.num_list_single = num_list_single
-        self.tokens = None
+        self.tokens: List[LeafNode] = None
         self.root = None
 
     # Shunting-yard algorithm. See Wikipedia for detailed explanations.
@@ -259,17 +276,13 @@ class ExprTree:
         return None
 
     def fix(self, gt, n_step=1):
+        print(f"fixing: goal is {gt}")
         entropy_list = np.array([x.entropy() for x in self.tokens])
         entropy_list = entropy_list / entropy_list.sum()
         # print([x.symbol for x in self.tokens])
 
         for i in range(n_step):
             if i > 0:
-                self.parse()
-            fix = self.fix_1step(gt)
-            if fix is not None:
-                return fix
-            else:
                 accept = False
                 while not accept:
                     n_sym_change = int(np.abs(np.random.normal(0, 1, 1)))
@@ -288,6 +301,15 @@ class ExprTree:
                     else:
                         for tok_id in token_ids:
                             self.tokens[tok_id].resume()
+                self.parse()
+
+            cur_temp = [self.class_list_expr[tok.symbol_id] for tok in self.tokens]
+            cur_str = [str(x) for x in [inverse_temp_to_num(temp, self.num_list_single) for temp in cur_temp]]
+            print(f"  fix step {i}: try {cur_str}")
+
+            fix = self.fix_1step(gt)
+            if fix is not None:
+                return fix
 
                 # print([x.symbol for x in self.tokens])
         return None

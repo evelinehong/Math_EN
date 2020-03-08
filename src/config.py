@@ -28,6 +28,7 @@ def get_args():
 
     parser.add_argument('--fix-rng', action='store_true', dest='fix_rng', default=False)
     parser.add_argument('--use-rule', action='store_true', dest='use_rule', default=False)
+    parser.add_argument('--nstep', type=int, dest='n_step', default=1)
 
     args = parser.parse_args()
     return args

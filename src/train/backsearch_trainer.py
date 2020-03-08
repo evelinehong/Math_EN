@@ -27,7 +27,7 @@ def inverse_temp_to_num(elem, num_list_single):
 
 class BackTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
-                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule):
+                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule, n_step):
         self.vocab_dict = vocab_dict
         self.vocab_list = vocab_list
         self.decode_classes_dict = decode_classes_dict
@@ -47,6 +47,7 @@ class BackTrainer(object):
 
         self.fix_rng = fix_rng
         self.use_rule = use_rule
+        self.n_step = n_step
 
         self.print_every = print_every
 
@@ -54,7 +55,7 @@ class BackTrainer(object):
 
         Checkpoint.CHECKPOINT_DIR_NAME = checkpoint_dir_name
 
-    def find_fix(self, preds, gts, all_probs, num_list):
+    def find_fix(self, preds, gts, all_probs, num_list, n_step):
         """
         preds: batch_size * expr len                 int - predicted ids
         res: batch_size                              float - labeled correct result
@@ -65,7 +66,12 @@ class BackTrainer(object):
 
         best_fix_list = []
         for pred, gt, all_prob, num_list_single in zip(preds, gts, all_probs, num_list):
-            l = pred.tolist().index(self.class_dict['END_token'])
+            end_idx = self.class_dict['END_token']
+            if end_idx in pred.tolist():
+                l = pred.tolist().index(end_idx)
+            else:
+                l = len(pred) - (len(pred) % 2)
+
 
             pred = pred[:l]
             all_prob = all_prob[:,2:]
@@ -83,7 +89,7 @@ class BackTrainer(object):
                 new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
                 print(f"No fix needed: {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
             else:
-                output = etree.fix(gt)
+                output = etree.fix(gt, n_step=n_step)
                 if output:
                     fix = [int(x+2) for x in output[0]]
 
@@ -94,7 +100,7 @@ class BackTrainer(object):
                     new_temp = [self.class_list[id] for id in new_ids]
                     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
 
-                    print(f"Fix found: {''.join(old_str)} ({''.join(old_temp)})"
+                    print(f"  Fix found: {''.join(old_str)} ({''.join(old_temp)})"
                           f"=> {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
                     print(output)
 
@@ -160,7 +166,8 @@ class BackTrainer(object):
             preds.data.cpu().numpy(),
             res,
             probs.data.cpu().numpy(),
-            num_list)
+            num_list,
+            self.n_step)
 
         for step, step_output in enumerate(decoder_outputs):
             fixed_step = torch.full((batch_size,), -1, dtype=torch.long) #-1 ignored in NLLLoss
@@ -181,11 +188,12 @@ class BackTrainer(object):
             self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), fixed_step)
 
             # target not used in training, only metric:
-            target = target_variables[:, step]
-            non_padding = target.ne(pad_in_classes_idx)
-            correct = seq[step].view(-1).eq(target).masked_select(non_padding).sum().item()#data[0]
-            match += correct
-            total += non_padding.sum().item()#.data[0]
+            if step < target_variables.size()[1]:
+                target = target_variables[:, step]
+                non_padding = target.ne(pad_in_classes_idx)
+                correct = seq[step].view(-1).eq(target).masked_select(non_padding).sum().item()#data[0]
+                match += correct
+                total += non_padding.sum().item()#.data[0]
 
         right = 0
         for i in range(batch_size):

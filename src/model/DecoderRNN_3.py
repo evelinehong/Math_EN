@@ -142,6 +142,8 @@ class DecoderRNN_3(BaseRNN):
                                                  max_length,  function, num_list, fix_rng):
         '''
         decoder_input: batch x 1
+        max_length: including END
+
         decoder_output: batch x 1 x classes,  probility_log
         '''
 
@@ -293,7 +295,7 @@ class DecoderRNN_3(BaseRNN):
         decoder_init_hidden = encoder_hidden
 
         if template_flag == False:
-            max_length = 40
+            max_length = max([2*len(x)+2 for x in num_list])
         else:
             max_length = inputs.size(1)
 
