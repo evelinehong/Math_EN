@@ -238,17 +238,20 @@ class SupervisedTrainer(object):
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
 
+            checkpoint = Checkpoint(model=model,
+                                    optimizer=self.optimizer,
+                                    epoch=epoch,
+                                    step=step,
+                                    train_acc_list=self.train_acc_list,
+                                    test_acc_list=self.test_acc_list,
+                                    loss_list=self.loss_list)
+            checkpoint.save_according_name("./experiment", "latest")
+
             if test_ans_acc > max_ans_acc:
-               max_ans_acc = test_ans_acc
-               th_checkpoint = Checkpoint(model=model,
-                                          optimizer=self.optimizer,
-                                          epoch=epoch,
-                                          step=step,
-                                          train_acc_list = self.train_acc_list,
-                                          test_acc_list = self.test_acc_list,
-                                          loss_list = self.loss_list).\
-                                            save_according_name("./experiment", 'best')
-               print(f"Checkpoint saved! max acc: {max_ans_acc}")
+                max_ans_acc = test_ans_acc
+                checkpoint.save_according_name("./experiment", 'best')
+                print(f"Checkpoint best saved! max acc: {max_ans_acc}")
+
 
             #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
