@@ -83,9 +83,7 @@ class LeafNode:
     def sample(self):
         # self.all_prob[self.symbol_id] = np.log(1e-30)
         # self.all_prob = self.all_prob - np.log(np.sum(np.exp(self.all_prob)))
-        all_prob_except_prev = self.all_prob.copy()
-        all_prob_except_prev[self.symbol_id] = np.log(1e-30)
-        all_prob = np.exp(all_prob_except_prev)
+        all_prob = np.exp(self.all_prob)
         all_prob /= all_prob.sum()
         new_symbol = np.random.choice(range(len(self.class_list_expr)), p=all_prob)
         self.prev_symbol_id = self.symbol_id
