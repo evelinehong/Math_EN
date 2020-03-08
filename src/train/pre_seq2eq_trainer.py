@@ -284,6 +284,7 @@ class SupervisedTrainer(object):
                 max_ans_acc = test_ans_acc
                 checkpoint.save_according_name("./experiment", 'best')
                 print(f"Checkpoint best saved! max acc: {max_ans_acc}")
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
 
 
             #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\

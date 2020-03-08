@@ -66,11 +66,7 @@ def backsearch():
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
 
-    wandb.config.fix_rng = args.fix_rng
-    wandb.config.use_rule = args.use_rule
-    wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
-
-    wandb.watch(seq2seq)
+    wandb.watch(seq2seq, log=None)
 
     weight = torch.ones(data_loader.classes_len)
     pad = data_loader.decode_classes_dict['PAD_token']
@@ -147,6 +143,8 @@ def step_one():
 
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
+
+    wandb.watch(seq2seq, log=None)
 
     weight = torch.ones(data_loader.classes_len)
     pad = data_loader.decode_classes_dict['PAD_token']
@@ -243,6 +241,13 @@ def step_three():
     print (test_temp_acc, test_ans_acc)
 
 if __name__ == "__main__":
+    wandb.config.fix_rng = args.fix_rng
+    wandb.config.use_rule = args.use_rule
+    wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
+    wandb.config.run_flag = args.run_flag
+    wandb.config.n_step = args.n_step
+    wandb.config.seed = args.seed
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
