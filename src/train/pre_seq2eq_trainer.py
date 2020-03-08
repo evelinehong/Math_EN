@@ -268,7 +268,7 @@ class SupervisedTrainer(object):
                                    loss = NLLLoss(),
                                    cuda_use = self.cuda_use)
         if resume:
-            checkpoint_path = Checkpoint.get_certain_checkpoint("./experiment", "best")
+            checkpoint_path = Checkpoint.get_certain_checkpoint("./experiment", "latest")
             resume_checkpoint = Checkpoint.load(checkpoint_path)
             model = resume_checkpoint.model
             self.optimizer = resume_checkpoint.optimizer
