@@ -104,8 +104,8 @@ class BackTrainer(object):
                     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
 
                     if DEBUG:
-                        print(f"  Fix found: {''.join(old_str)} ({''.join(old_temp)})"
-                              f"=> {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
+                        print(f"  Fix found: {''.join(old_str)} "
+                              f"=> {''.join(new_str)} = {gt}")
                         print(f"  {output}")
 
             best_fix_list.append(fix)

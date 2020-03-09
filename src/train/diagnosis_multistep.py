@@ -207,19 +207,18 @@ class ExprTree:
         queue = Q.PriorityQueue()
         change = PrioritizedItem(0., (self.root, gt))
         queue.put(change)
-        find_fix = False
         while not queue.empty():
             change = queue.get()
             prob = change.priority
             node, target, *rest = change.item
             if isinstance(node, LeafNode):
                 # print('find a fix, early stop.')
-                token_id = self.tokens.index(node)
+                token_idx = self.tokens.index(node)
 
                 if len(change.item) >= 3: # if target_id exists
                     target_id = change.item[2]
                     new_ids = old_ids.copy()
-                    new_ids[token_id] = target_id
+                    new_ids[token_idx] = target_id
                     return (new_ids, self.root.res()[1] - prob)
                 else:
                     return None
@@ -234,8 +233,9 @@ class ExprTree:
             if change is not None:
                 if DEBUG and len(change.item) >= 3:
                     changed_token_ids = old_ids.copy()
-                    changed_token_ids[self.tokens.index(left)] = change.item[2]
-                    print(f"    try change left: {self.token_id_list_to_str(changed_token_ids)}")
+                    changed_idx = self.tokens.index(left)
+                    changed_token_ids[changed_idx] = change.item[2]
+                    print(f"    try change: {self.token_id_list_to_str(changed_token_ids)}")
 
                 queue.put(change)
 
@@ -245,25 +245,33 @@ class ExprTree:
             if change is not None:
                 if DEBUG and len(change.item) >= 3:
                     changed_token_ids = old_ids.copy()
-                    changed_token_ids[self.tokens.index(right)] = change.item[2]
-                    print(f"    try change right: {self.token_id_list_to_str(changed_token_ids)}")
+                    changed_idx = self.tokens.index(right)
+                    changed_token_ids[changed_idx] = change.item[2]
+                    print(f"    try change: {self.token_id_list_to_str(changed_token_ids)}")
 
                 queue.put(change)
 
             # change op
             ori_op = op.symbol
-            token_id = self.tokens.index(op)
+            token_idx = self.tokens.index(op)
             sub_target = None
             for new_op in sym2priority.keys():
                 if new_op == ori_op:
                     continue
                 new_str = [str(tok.res()[0]) for tok in self.tokens]
-                new_str[token_id] = "**" if new_op=="^" else new_op
+                new_str[token_idx] = "**" if new_op=="^" else new_op
                 try:
                     new_res = eval(''.join(new_str))
                     if abs(new_res - gt) < 1e-5:
                         sub_target = new_op
-                        change = PrioritizedItem(op.prob - op.all_prob[self.class_list_expr.index(sub_target)], (op, sub_target))
+                        target_id = self.class_list_expr.index(sub_target)
+                        change = PrioritizedItem(op.prob - op.all_prob[target_id], (op, sub_target, target_id))
+
+                        if DEBUG and len(change.item) >= 3:
+                            changed_token_ids = old_ids.copy()
+                            changed_token_ids[token_idx] = change.item[2]
+                            print(f"    try change op: {self.token_id_list_to_str(changed_token_ids)}")
+
                         queue.put(change)
                 except:
                     pass
