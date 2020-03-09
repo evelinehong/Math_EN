@@ -161,7 +161,7 @@ class DataLoader():
             batch_data_dict['batch_decode_pad_idx'] = batch_decode_pad_idx
 
         if len(data_batch) != 1:
-            new_batch_data_dict = self._shuffled_batch(batch_data_dict)
+            new_batch_data_dict = self._sorted_num_list_batch(batch_data_dict)
         else:
             new_batch_data_dict = batch_data_dict
         return new_batch_data_dict
@@ -170,6 +170,14 @@ class DataLoader():
         new_batch_data_dict = dict()
         batch_encode_len = np.array(batch_data_dict['batch_encode_len'])
         sort_idx = np.argsort(-batch_encode_len)
+        for key, value in batch_data_dict.items():
+            new_batch_data_dict[key] = np.array(value)[sort_idx]
+        return new_batch_data_dict
+
+    def _sorted_num_list_batch(self, batch_data_dict):
+        new_batch_data_dict = dict()
+        num_list_lengths = np.array([len(numls) for numls in batch_data_dict['batch_num_list']])
+        sort_idx = np.argsort(num_list_lengths)
         for key, value in batch_data_dict.items():
             new_batch_data_dict[key] = np.array(value)[sort_idx]
         return new_batch_data_dict
