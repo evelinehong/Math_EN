@@ -1,5 +1,6 @@
 #encoding: utf-8
 import random
+import sys
 
 import numpy as np
 import pdb
@@ -215,7 +216,7 @@ class DecoderRNN_3(BaseRNN):
 
                 mask = mask * mask_temp
                 mask = mask * mask_pad
-                mask = mask * mask_constant
+                # mask = mask * mask_constant
 
                 mask_end = torch.ones((batch_size, classes_len), dtype=torch.bool)
                 if di == max_length - 1:
@@ -240,9 +241,14 @@ class DecoderRNN_3(BaseRNN):
                             all_except_end = list(range(classes_len))
                             all_except_end.remove(self.filter_END())
                             mask_rng[i, all_except_end] = 0
-                    elif di < min_len[i]:
+                    elif di < min_len[i] and torch.any(mask[i]==1): # only enforce min_len if there's another possible symbol
                         mask_rng[i, self.filter_END()] = 0
                 mask = mask * mask_rng
+
+            for i in range(batch_size):
+                if torch.all(mask[i] == 0):
+                    print(f"PROBLEM: mask is all zero, idx {di}, {max_length}, {num_list[i]}")
+                    sys.exit(1)
                 
             mask[mask == 0] = 1e-12
 

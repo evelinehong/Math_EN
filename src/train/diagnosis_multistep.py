@@ -196,7 +196,7 @@ class ExprTree:
         if isinstance(node, LeafNode):
             temp_diff = np.array([abs(target - num) for num in self.num_list_single])
             if np.any(temp_diff < 1e-5):
-                target_idx = np.where(temp_diff < 1e-5)[0]
+                target_idx = np.argmax(temp_diff < 1e-5)
                 target_id = self.class_list_expr.index('temp_' + (chr(ord('a') + target_idx)))
                 change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
             elif abs(target - 3.14) < 1e-5:
@@ -212,7 +212,11 @@ class ExprTree:
         old_ids = [tok.symbol_id for tok in self.tokens]
 
         queue = Q.PriorityQueue()
-        change = PrioritizedItem(0., (self.root, gt))
+        change = None
+        if isinstance(self.root, LeafNode):
+            change = self.find_valid_change(self.root, gt)
+        if change is None:
+            change = PrioritizedItem(0., (self.root, gt))
         queue.put(change)
         while not queue.empty():
             change = queue.get()
@@ -319,7 +323,7 @@ class ExprTree:
 
             fix = self.fix_1step(gt)
             if fix is not None:
-                return fix
+                return fix, i + 1
 
                 # print([x.symbol for x in self.tokens])
         return None

@@ -88,6 +88,7 @@ class BackTrainer(object):
             else:
                 output = etree.fix(gt, n_step=n_step)
                 if output:
+                    (output, fix_step) = output
                     fix = [int(x + 2) for x in output[0]]
 
                     if DEBUG:
