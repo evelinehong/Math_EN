@@ -22,14 +22,14 @@ def inverse_temp_to_num(elem, num_list_single):
     elif 'PI' == elem:
         return 3.14
     elif elem.isdigit():
-        return int(elem)
+        return float(elem)
     else:
         return elem
 
 
 class BackTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
-                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule, n_step):
+                 loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule, n_step):
         self.vocab_dict = vocab_dict
         self.vocab_list = vocab_list
         self.decode_classes_dict = decode_classes_dict
@@ -37,13 +37,8 @@ class BackTrainer(object):
         self.class_dict = decode_classes_dict
         self.class_list = decode_classes_list
 
-        random_seed = 10
-        if random_seed is not None:
-            random.seed(random_seed)
-            torch.manual_seed(random_seed)
-
         self.cuda_use = cuda_use
-        self.loss = loss 
+        self.loss = loss
         if self.cuda_use == True:
             self.loss.cuda()
 
@@ -74,12 +69,11 @@ class BackTrainer(object):
             else:
                 l = len(pred) - (len(pred) % 2)
 
-
             pred = pred[:l]
-            all_prob = all_prob[:,2:]
-            expr_tree_pred = [x-2 for x in pred] # convert index
+            all_prob = all_prob[:, 2:]
+            expr_tree_pred = [x - 2 for x in pred]  # convert index
             # prob = all_prob[range(l), pred]
-            #pred_str = [id2sym(x) for x in pred]
+            # pred_str = [id2sym(x) for x in pred]
 
             tokens = list(zip(expr_tree_pred, all_prob))
             etree = ExprTree(num_list_single, class_list_expr)
@@ -87,23 +81,23 @@ class BackTrainer(object):
             fix = []
             if abs(etree.res()[0] - gt) <= 1e-5:
                 fix = list(pred)
-                new_temp = [self.class_list[id] for id in fix]
-                new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
                 if DEBUG:
+                    new_temp = [self.class_list[id] for id in fix]
+                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
                     print(f"No fix needed: {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
             else:
                 output = etree.fix(gt, n_step=n_step)
                 if output:
-                    fix = [int(x+2) for x in output[0]]
-
-                    old_temp = [self.class_list[id] for id in pred]
-                    old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
-
-                    new_ids = fix
-                    new_temp = [self.class_list[id] for id in new_ids]
-                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+                    fix = [int(x + 2) for x in output[0]]
 
                     if DEBUG:
+                        old_temp = [self.class_list[id] for id in pred]
+                        old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+
+                        new_ids = fix
+                        new_temp = [self.class_list[id] for id in new_ids]
+                        new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+
                         print(f"  Fix found: {''.join(old_str)} "
                               f"=> {''.join(new_str)} = {gt}")
                         print(f"  {output}")
@@ -111,40 +105,38 @@ class BackTrainer(object):
             best_fix_list.append(fix)
         return best_fix_list
 
-        
     def _convert_f_e_2_d_sybmbol(self, target_variable):
         new_variable = []
-        batch,colums = target_variable.size()
+        batch, colums = target_variable.size()
         for i in range(batch):
             tmp = []
             for j in range(colums):
-                #idx = self.decode_classes_dict[self.vocab_list[target_variable[i][j].data[0]]]
+                # idx = self.decode_classes_dict[self.vocab_list[target_variable[i][j].data[0]]]
                 idx = self.decode_classes_dict[self.vocab_list[target_variable[i][j].item()]]
                 tmp.append(idx)
             new_variable.append(tmp)
         return Variable(torch.LongTensor(np.array(new_variable)))
 
-
-    def _train_batch(self, input_variables, input_lengths,target_variables, target_lengths, model,\
-                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions):
+    def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model, \
+                     template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions):
         # decoder_outputs: expr_len (list) * batch_size * classes
         # symbols_list: expr_len (list) * batch_size * 1
         decoder_outputs, decoder_hidden, symbols_list = \
-                                      model(input_variable = input_variables, 
-                                      input_lengths = input_lengths, 
-                                      target_variable = target_variables, 
-                                      template_flag = template_flag,
-                                      teacher_forcing_ratio = teacher_forcing_ratio, 
-                                      mode = mode,
-                                      use_rule = self.use_rule,
-                                      use_cuda = self.cuda_use,
-                                      vocab_dict = self.vocab_dict,
-                                      vocab_list = self.vocab_list,
-                                      class_dict = self.class_dict,
-                                      class_list = self.class_list,
-                                      num_list = num_list,
-                                      fix_rng = self.fix_rng,
-                                      use_rule_old = False)
+            model(input_variable=input_variables,
+                  input_lengths=input_lengths,
+                  target_variable=target_variables,
+                  template_flag=template_flag,
+                  teacher_forcing_ratio=teacher_forcing_ratio,
+                  mode=mode,
+                  use_rule=self.use_rule,
+                  use_cuda=self.cuda_use,
+                  vocab_dict=self.vocab_dict,
+                  vocab_list=self.vocab_list,
+                  class_dict=self.class_dict,
+                  class_list=self.class_list,
+                  num_list=num_list,
+                  fix_rng=self.fix_rng,
+                  use_rule_old=False)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -161,8 +153,8 @@ class BackTrainer(object):
 
         self.loss.reset()
 
-        probs = torch.stack(decoder_outputs, dim=1) # batch_size * expr_len * classes
-        preds = torch.stack(symbols_list, dim=1).squeeze(2) # batch_size * expr_len
+        probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
+        preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
         preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
         res = solutions
 
@@ -174,7 +166,7 @@ class BackTrainer(object):
             self.n_step)
 
         for step, step_output in enumerate(decoder_outputs):
-            fixed_step = torch.full((batch_size,), -1, dtype=torch.long) #-1 ignored in NLLLoss
+            fixed_step = torch.full((batch_size,), -1, dtype=torch.long)  # -1 ignored in NLLLoss
             for i in range(batch_size):
                 if len(fix_list[i]):
                     if step < len(fix_list[i]):
@@ -195,19 +187,19 @@ class BackTrainer(object):
             if step < target_variables.size()[1]:
                 target = target_variables[:, step]
                 non_padding = target.ne(pad_in_classes_idx)
-                correct = seq[step].view(-1).eq(target).masked_select(non_padding).sum().item()#data[0]
+                correct = seq[step].view(-1).eq(target).masked_select(non_padding).sum().item()  # data[0]
                 match += correct
-                total += non_padding.sum().item()#.data[0]
+                total += non_padding.sum().item()  # .data[0]
 
         right = 0
         for i in range(batch_size):
             for j in range(target_variables.size(1)):
-                #if target_variables[i][j].data[0] != pad_in_classes_idx  and \
-                              #target_variables[i][j].data[0] == seq_var[i][j].data[0]:
-                if target_variables[i][j].item() != pad_in_classes_idx  and \
-                              target_variables[i][j].item() == seq_var[i][j].item():
+                # if target_variables[i][j].data[0] != pad_in_classes_idx  and \
+                # target_variables[i][j].data[0] == seq_var[i][j].data[0]:
+                if target_variables[i][j].item() != pad_in_classes_idx and \
+                        target_variables[i][j].item() == seq_var[i][j].item():
                     continue
-                #elif target_variables[i][j].data[0] == 1:
+                # elif target_variables[i][j].data[0] == 1:
                 elif target_variables[i][j].item() == 1:
                     right += 1
                     break
@@ -219,32 +211,31 @@ class BackTrainer(object):
         self.optimizer.step()
         return self.loss.get_loss(), [right, match, total]
 
-
     def _train_epoches(self, data_loader, model, batch_size, start_epoch, start_step, n_epoch, \
-                            mode, template_flag, teacher_forcing_ratio, post_flag):
+                       mode, template_flag, teacher_forcing_ratio, post_flag):
         print_loss_total = 0
 
         train_list = data_loader.math23k_train_list
         test_list = data_loader.math23k_test_list
         valid_list = data_loader.math23k_valid_list
-        train_list = train_list + valid_list# = data_loader.math23k_valid_list
-        steps_per_epoch = len(train_list)/batch_size
+        train_list = train_list + valid_list  # = data_loader.math23k_valid_list
+        steps_per_epoch = len(train_list) / batch_size
         total_steps = steps_per_epoch * n_epoch
 
         step = start_step
         step_elapsed = 0
 
-        threshold = [0]+[1]*9
+        threshold = [0] + [1] * 9
 
-        max_ans_acc = 0 
+        max_ans_acc = 0
 
         for epoch in range(start_epoch, n_epoch + 1):
             epoch_loss_total = 0
 
-            #marker if self.teacher_schedule:
+            # marker if self.teacher_schedule:
 
             batch_generator = data_loader.get_batch(train_list, batch_size, True)
-            
+
             right_count = 0
             match = 0
             total_m = 0
@@ -261,7 +252,7 @@ class BackTrainer(object):
                 num_list = batch_data_dict['batch_num_list']
                 solutions = batch_data_dict['batch_solution']
 
-                #cuda
+                # cuda
                 input_variables = Variable(torch.LongTensor(input_variables))
                 target_variables = Variable(torch.LongTensor(target_variables))
 
@@ -269,19 +260,18 @@ class BackTrainer(object):
                     input_variables = input_variables.cuda()
                     target_variables = target_variables.cuda()
 
-                loss, com_list = self._train_batch(input_variables = input_variables, 
-                                                   input_lengths = input_lengths, 
-                                                   target_variables = target_variables, 
-                                                   target_lengths = target_lengths, 
-                                                   model = model, 
-                                                   template_flag = template_flag,
-                                                   teacher_forcing_ratio = teacher_forcing_ratio,
-                                                   mode = mode, 
-                                                   batch_size = batch_size,
-                                                   post_flag = post_flag,
-                                                   num_list = num_list,
-                                                   solutions = solutions)
-
+                loss, com_list = self._train_batch(input_variables=input_variables,
+                                                   input_lengths=input_lengths,
+                                                   target_variables=target_variables,
+                                                   target_lengths=target_lengths,
+                                                   model=model,
+                                                   template_flag=template_flag,
+                                                   teacher_forcing_ratio=teacher_forcing_ratio,
+                                                   mode=mode,
+                                                   batch_size=batch_size,
+                                                   post_flag=post_flag,
+                                                   num_list=num_list,
+                                                   solutions=solutions)
 
                 right_count += com_list[0]
                 total_r += batch_size
@@ -295,26 +285,26 @@ class BackTrainer(object):
                 if step % self.print_every == 0 and step_elapsed >= self.print_every:
                     print_loss_avg = print_loss_total / self.print_every
                     print_loss_total = 0
-                    print ('step: %d, Progress: %d%%, Train %s: %.4f, Teacher_r: %.2f' % (
-                           step,
-                           step*1.0 / total_steps * 100,
-                           self.loss.name,
-                           print_loss_avg,
-                           teacher_forcing_ratio))
+                    print('step: %d, Progress: %d%%, Train %s: %.4f, Teacher_r: %.2f' % (
+                        step,
+                        step * 1.0 / total_steps * 100,
+                        self.loss.name,
+                        print_loss_avg,
+                        teacher_forcing_ratio))
 
             model.eval()
-            train_temp_acc, train_ans_acc =\
-                                        self.evaluator.evaluate(model = model,
-                                                                data_loader = data_loader,
-                                                                data_list = train_list,
-                                                                template_flag = template_flag,
-                                                                batch_size = batch_size,
-                                                                evaluate_type = 0,
-                                                                use_rule = self.use_rule,
-                                                                mode = mode,
-                                                                post_flag=post_flag,
-                                                                use_rule_old=False)
-            #valid_temp_acc, valid_ans_acc =\
+            train_temp_acc, train_ans_acc = \
+                self.evaluator.evaluate(model=model,
+                                        data_loader=data_loader,
+                                        data_list=train_list,
+                                        template_flag=template_flag,
+                                        batch_size=batch_size,
+                                        evaluate_type=0,
+                                        use_rule=self.use_rule,
+                                        mode=mode,
+                                        post_flag=post_flag,
+                                        use_rule_old=False)
+            # valid_temp_acc, valid_ans_acc =\
             #                            self.evaluator.evaluate(model = model,
             #                                                    data_loader = data_loader,
             #                                                    data_list = valid_list,
@@ -325,21 +315,21 @@ class BackTrainer(object):
             #                                                    mode = mode,
             #                                                    post_flag=post_flag,
             #                                                    use-rule_old=False)
-            test_temp_acc, test_ans_acc =\
-                                        self.evaluator.evaluate(model = model,
-                                                                data_loader = data_loader,
-                                                                data_list = test_list,
-                                                                template_flag = template_flag,
-                                                                batch_size = batch_size,
-                                                                evaluate_type = 0,
-                                                                use_rule = self.use_rule,
-                                                                mode = mode,
-                                                                post_flag=post_flag,
-                                                                use_rule_old=False,
-                                                                name_save="test")
+            test_temp_acc, test_ans_acc = \
+                self.evaluator.evaluate(model=model,
+                                        data_loader=data_loader,
+                                        data_list=test_list,
+                                        template_flag=template_flag,
+                                        batch_size=batch_size,
+                                        evaluate_type=0,
+                                        use_rule=self.use_rule,
+                                        mode=mode,
+                                        post_flag=post_flag,
+                                        use_rule_old=False,
+                                        name_save="test")
             self.train_acc_list.append((epoch, step, train_ans_acc))
             self.test_acc_list.append((epoch, step, test_ans_acc))
-            self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
+            self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
 
             checkpoint = Checkpoint(model=model,
                                     optimizer=self.optimizer,
@@ -355,21 +345,19 @@ class BackTrainer(object):
                 checkpoint.save_according_name("./experiment", 'best')
                 print(f"Checkpoint best saved! max acc: {max_ans_acc}")
 
-
-            #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
+            # print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
-            print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
-                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc))
-
+            print("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f, max_test_acc: %.2f" \
+                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_ans_acc))
 
     def train(self, model, data_loader, batch_size, n_epoch, template_flag, \
-                        resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):
-        self.evaluator = Evaluator(vocab_dict = self.vocab_dict,
-                                   vocab_list = self.vocab_list,
-                                   decode_classes_dict = self.decode_classes_dict,
-                                   decode_classes_list = self.decode_classes_list,
-                                   loss = NLLLoss(),
-                                   cuda_use = self.cuda_use)
+              resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):
+        self.evaluator = Evaluator(vocab_dict=self.vocab_dict,
+                                   vocab_list=self.vocab_list,
+                                   decode_classes_dict=self.decode_classes_dict,
+                                   decode_classes_list=self.decode_classes_list,
+                                   loss=NLLLoss(),
+                                   cuda_use=self.cuda_use)
         if resume:
             checkpoint_path = Checkpoint.get_certain_checkpoint("./experiment", "latest")
             resume_checkpoint = Checkpoint.load(checkpoint_path)
@@ -397,15 +385,15 @@ class BackTrainer(object):
                 optimizer = Optimizer(optim.Adam(model.parameters()), max_grad_norm=0)
             self.optimizer = optimizer
 
-        self._train_epoches(data_loader = data_loader, 
-                            model = model, 
-                            batch_size = batch_size,
-                            start_epoch = start_epoch, 
-                            start_step = start_step, 
-                            n_epoch = n_epoch,
-                            mode = mode,
-                            template_flag = template_flag,
+        self._train_epoches(data_loader=data_loader,
+                            model=model,
+                            batch_size=batch_size,
+                            start_epoch=start_epoch,
+                            start_step=start_step,
+                            n_epoch=n_epoch,
+                            mode=mode,
+                            template_flag=template_flag,
                             teacher_forcing_ratio=teacher_forcing_ratio,
-                            post_flag = post_flag)
+                            post_flag=post_flag)
 
 

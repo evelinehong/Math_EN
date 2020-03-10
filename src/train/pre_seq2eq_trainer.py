@@ -20,11 +20,6 @@ class SupervisedTrainer(object):
         self.class_dict = decode_classes_dict
         self.class_list = decode_classes_list
 
-        random_seed = 10
-        if random_seed is not None:
-            random.seed(random_seed)
-            torch.manual_seed(random_seed)
-
         self.cuda_use = cuda_use
         self.loss = loss
         if self.cuda_use == True:

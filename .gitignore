@@ -2,3 +2,7 @@ __pycache__
 *.pyc
 .idea/
 *.swp
+wandb/
+experiment/
+data/pg_seq_norm_False*
+.vscode/

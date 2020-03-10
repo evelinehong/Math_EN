@@ -161,7 +161,7 @@ class DataLoader():
             batch_data_dict['batch_decode_pad_idx'] = batch_decode_pad_idx
 
         if len(data_batch) != 1:
-            new_batch_data_dict = self._sorted_num_list_batch(batch_data_dict)
+            new_batch_data_dict = self._shuffled_batch(batch_data_dict)
         else:
             new_batch_data_dict = batch_data_dict
         return new_batch_data_dict

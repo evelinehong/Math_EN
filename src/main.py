@@ -5,6 +5,8 @@ import logging
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
+import numpy as np
+import random
 
 from utils import DataLoader
 from train import SupervisedTrainer, BackTrainer
@@ -232,6 +234,10 @@ def step_three():
     print (test_temp_acc, test_ans_acc)
 
 if __name__ == "__main__":
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
     if 'test_23k' in args.run_flag:
         step_one_test()
     elif args.run_flag == 'test_57k':

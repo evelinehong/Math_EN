@@ -84,6 +84,13 @@ class LeafNode:
         # self.all_prob[self.symbol_id] = np.log(1e-30)
         # self.all_prob = self.all_prob - np.log(np.sum(np.exp(self.all_prob)))
         all_prob = np.exp(self.all_prob)
+
+        # zero out impossible vars
+        for (idx, k) in enumerate(self.class_list_expr):
+            if 'temp' in k:
+                if (ord(k[5]) - ord('a') >= len(self.num_list_single)):
+                    all_prob[idx] = 0
+
         all_prob /= all_prob.sum()
         new_symbol = np.random.choice(range(len(self.class_list_expr)), p=all_prob)
         self.prev_symbol_id = self.symbol_id
