@@ -1,5 +1,7 @@
 import sys
 import random
+from collections import defaultdict
+
 import numpy as np
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
@@ -45,6 +47,7 @@ class BackTrainer(object):
         self.fix_rng = fix_rng
         self.use_rule = use_rule
         self.n_step = n_step
+        self.fix_buffer = defaultdict(list)
 
         self.print_every = print_every
 
@@ -52,7 +55,7 @@ class BackTrainer(object):
 
         Checkpoint.CHECKPOINT_DIR_NAME = checkpoint_dir_name
 
-    def find_fix(self, preds, gts, all_probs, num_list, n_step):
+    def find_fix(self, preds, gts, all_probs, num_list, ids, n_step):
         """
         preds: batch_size * expr len                 int - predicted ids
         res: batch_size                              float - labeled correct result
@@ -62,7 +65,7 @@ class BackTrainer(object):
         class_list_expr = self.class_list[2:]
 
         best_fix_list = []
-        for pred, gt, all_prob, num_list_single in zip(preds, gts, all_probs, num_list):
+        for pred, gt, all_prob, item_id, num_list_single in zip(preds, gts, all_probs, ids, num_list):
             end_idx = self.class_dict['END_token']
             if end_idx in pred.tolist():
                 l = pred.tolist().index(end_idx)
@@ -71,37 +74,44 @@ class BackTrainer(object):
 
             pred = pred[:l]
             all_prob = all_prob[:, 2:]
-            expr_tree_pred = [x - 2 for x in pred]  # convert index
-            # prob = all_prob[range(l), pred]
-            # pred_str = [id2sym(x) for x in pred]
 
-            tokens = list(zip(expr_tree_pred, all_prob))
-            etree = ExprTree(num_list_single, class_list_expr)
-            etree.parse(tokens)
             fix = []
-            if abs(etree.res()[0] - gt) <= 1e-5:
-                fix = list(pred)
-                if DEBUG:
-                    new_temp = [self.class_list[id] for id in fix]
-                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
-                    print(f"No fix needed: {''.join(new_str)} ({''.join(new_temp)}) = {gt}")
+            fix_source_str = ""
+            fix_step = -1
+
+            if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
+                fix = self.fix_buffer[item_id][0]
+                fix_source_str = "buffer"
             else:
-                output = etree.fix(gt, n_step=n_step)
-                if output:
-                    (output, fix_step) = output
-                    fix = [int(x + 2) for x in output[0]]
+                expr_tree_pred = [x - 2 for x in pred]  # convert index
+                # prob = all_prob[range(l), pred]
+                # pred_str = [id2sym(x) for x in pred]
 
-                    if DEBUG:
-                        old_temp = [self.class_list[id] for id in pred]
-                        old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+                tokens = list(zip(expr_tree_pred, all_prob))
+                etree = ExprTree(num_list_single, class_list_expr)
+                etree.parse(tokens)
 
-                        new_ids = fix
-                        new_temp = [self.class_list[id] for id in new_ids]
-                        new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+                if abs(etree.res()[0] - gt) <= 1e-5:
+                    fix = list(pred)
+                    fix_source_str = "no fix needed"
+                else:
+                    output = etree.fix(gt, n_step=n_step)
+                    if output:
+                        (output, fix_step) = output
+                        fix = [int(x + 2) for x in output[0]]
+                        fix_source_str = "fix found"
 
-                        print(f"  Fix found: {''.join(old_str)} "
-                              f"=> {''.join(new_str)} = {gt}")
-                        print(f"  {output}")
+            if len(fix) > 0:
+                self.fix_buffer[item_id].append(fix)
+                if DEBUG:
+                    old_temp = [self.class_list[id] for id in pred]
+                    old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+
+                    new_ids = fix
+                    new_temp = [self.class_list[id] for id in new_ids]
+                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+
+                    print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {''.join(old_str)} => {''.join(new_str)} = {gt}")
 
             best_fix_list.append(fix)
         return best_fix_list
@@ -119,7 +129,7 @@ class BackTrainer(object):
         return Variable(torch.LongTensor(np.array(new_variable)))
 
     def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model, \
-                     template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions):
+                     template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions, ids):
         # decoder_outputs: expr_len (list) * batch_size * classes
         # symbols_list: expr_len (list) * batch_size * 1
         decoder_outputs, decoder_hidden, symbols_list = \
@@ -164,6 +174,7 @@ class BackTrainer(object):
             res,
             probs.data.cpu().numpy(),
             num_list,
+            ids,
             self.n_step)
 
         for step, step_output in enumerate(decoder_outputs):
@@ -246,6 +257,7 @@ class BackTrainer(object):
             for batch_data_dict in batch_generator:
                 step += 1
                 step_elapsed += 1
+                ids = batch_data_dict['batch_index']
                 input_variables = batch_data_dict['batch_encode_pad_idx']
                 input_lengths = batch_data_dict['batch_encode_len']
                 target_variables = batch_data_dict['batch_decode_pad_idx']
@@ -272,7 +284,8 @@ class BackTrainer(object):
                                                    batch_size=batch_size,
                                                    post_flag=post_flag,
                                                    num_list=num_list,
-                                                   solutions=solutions)
+                                                   solutions=solutions,
+                                                   ids=ids)
 
                 right_count += com_list[0]
                 total_r += batch_size
