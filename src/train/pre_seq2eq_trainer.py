@@ -205,7 +205,8 @@ class SupervisedTrainer(object):
                                                                 use_rule = self.use_rule,
                                                                 mode = mode,
                                                                 post_flag=post_flag,
-                                                                use_rule_old=False)
+                                                                use_rule_old=False,
+                                                                fix_rng=self.fix_rng)
             #valid_temp_acc, valid_ans_acc =\
             #                            self.evaluator.evaluate(model = model,
             #                                                    data_loader = data_loader,
@@ -216,7 +217,8 @@ class SupervisedTrainer(object):
             #                                                    use_rule = self.use_rule,
             #                                                    mode = mode,
             #                                                    post_flag=post_flag,
-            #                                                    use-rule_old=False)
+            #                                                    use-rule_old=False,
+            #                                                    fix_rng=self.fix_rng)
             test_temp_acc, test_ans_acc =\
                                         self.evaluator.evaluate(model = model,
                                                                 data_loader = data_loader,
@@ -228,7 +230,8 @@ class SupervisedTrainer(object):
                                                                 mode = mode,
                                                                 post_flag=post_flag,
                                                                 use_rule_old=False,
-                                                                name_save="test")
+                                                                name_save="test",
+                                                                fix_rng=self.fix_rng)
             self.train_acc_list.append((epoch, step, train_ans_acc))
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
