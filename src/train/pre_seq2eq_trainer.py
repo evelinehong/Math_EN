@@ -285,6 +285,8 @@ class SupervisedTrainer(object):
                 checkpoint.save_according_name("./experiment", 'best')
                 print(f"Checkpoint best saved! max acc: {max_ans_acc}")
                 wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
+                wandb.save(f"./data/pg_seq_norm_False_train.json")
+                wandb.save(f"./data/pg_seq_norm_False_test.json")
 
 
             #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
