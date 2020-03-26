@@ -70,7 +70,7 @@ class BackTrainer(object):
             if end_idx in pred.tolist():
                 l = pred.tolist().index(end_idx)
             else:
-                l = len(pred) - (len(pred) % 2)
+                return None
 
             pred = pred[:l]
             all_prob = all_prob[:, 2:]

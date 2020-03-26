@@ -90,6 +90,8 @@ class LeafNode:
             if 'temp' in k:
                 if (ord(k[5]) - ord('ta') >= len(self.num_list_single)):
                     all_prob[idx] = 0
+            if '(' == k or ')' == k:
+                all_prob[idx] = 0
 
         # zero out self, if there's some other valid symbol
         # if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
@@ -167,6 +169,19 @@ class ExprTree:
         for token in tokens:
             if 'temp' in token.symbol or 'PI' == token.symbol or token.symbol.isdigit():
                 values.append(token)
+            elif '(' == token.symbol:
+                operators.append(token)
+            elif ')' == token.symbol:
+                while operators[-1].symbol != '(':
+                    op = operators.pop()
+                    right = values.pop()
+                    left = values.pop()
+                    new_node = Node(left, right, op)
+                    op.parent = new_node
+                    right.parent = new_node
+                    left.parent = new_node
+                    values.append(new_node)
+                operators.pop() # discard left parenthesis
             else:
                 while len(operators) > 0 and operators[-1].priority >= token.priority:
                     op = operators.pop()

@@ -256,9 +256,8 @@ class DecoderRNN_3(BaseRNN):
                     all_except_end = list(range(classes_len))
                     all_except_end.remove(self.filter_END())
                     if di == max_len[i] or di == max_length - 1:
-                        if not ended[i]:
+                        if not ended[i] and torch.any(mask[i, self.filter_END()] == 1):
                             mask_rng[i, all_except_end] = 0
-                            mask[i, self.filter_END()] = 1
                     elif di < min_len[i]:
                         if torch.any(mask[i, all_except_end] == 1): # only if there's another possible symbol
                             mask_rng[i, self.filter_END()] = 0

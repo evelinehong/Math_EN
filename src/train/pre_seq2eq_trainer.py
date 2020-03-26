@@ -253,8 +253,8 @@ class SupervisedTrainer(object):
 
             #print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
-            print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
-                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc))
+            print("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f, max_test_acc: %.2f" \
+                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_ans_acc))
 
 
     def train(self, model, data_loader, batch_size, n_epoch, template_flag, \
