@@ -8,8 +8,9 @@ DEBUG = False
 sym2priority = {'+': 0, '-': 0, '*': 1, '/': 1, "^": 1}
 #sym2priority.update({str(x):2 if x.isdigit()})
 
+DIFF_THRESHOLD = 1e-5
 NAN_THRESHOLD = 10e7
-thres_nan = lambda x: x if abs(x) < NAN_THRESHOLD else float('nan')
+thres_nan = lambda x: x if (NAN_THRESHOLD > abs(x) > DIFF_THRESHOLD) else float('nan')
 plus = lambda x,y: thres_nan(x + y)
 minus = lambda x,y: thres_nan(x - y)
 times = lambda x,y: thres_nan(x * y)
@@ -214,11 +215,11 @@ class ExprTree:
     def find_valid_change(self, node, target):
         if isinstance(node, LeafNode):
             temp_diff = np.array([abs(target - num) for num in self.num_list_single])
-            if np.any(temp_diff < 1e-5):
-                target_idx = np.argmax(temp_diff < 1e-5)
+            if np.any(temp_diff < DIFF_THRESHOLD):
+                target_idx = np.argmax(temp_diff < DIFF_THRESHOLD)
                 target_id = self.class_list_expr.index('temp_' + (chr(ord('a') + target_idx)))
                 change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
-            elif abs(target - 3.14) < 1e-5:
+            elif abs(target - 3.14) < 1e-2:
                 target_id = self.class_list_expr.index('PI')
                 change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
             else:
@@ -292,7 +293,7 @@ class ExprTree:
                 new_str[token_idx] = "**" if new_op=="^" else new_op
                 try:
                     new_res = eval(''.join(new_str))
-                    if abs(new_res - gt) < 1e-5:
+                    if abs(new_res - gt) < DIFF_THRESHOLD:
                         sub_target = new_op
                         target_id = self.class_list_expr.index(sub_target)
                         change = PrioritizedItem(op.prob - op.all_prob[target_id], (op, sub_target, target_id))

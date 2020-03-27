@@ -10,6 +10,19 @@ from torch.autograd import Variable
 import torch.nn as nn
 import pdb
 
+
+def inverse_temp_to_num(elem, num_list_single):
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    if 'temp' in elem:
+        index = alphabet.index(elem[-1])
+        return num_list_single[index]
+    elif 'PI' == elem:
+        return 3.14
+    elif elem.isdigit():
+        return float(elem)
+    else:
+        return elem
+
 class SupervisedTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
                   loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule):
@@ -48,7 +61,7 @@ class SupervisedTrainer(object):
         return Variable(torch.LongTensor(np.array(new_variable)))
 
 
-    def _train_batch(self, input_variables, input_lengths,target_variables, target_lengths, model,\
+    def _train_batch(self, input_variables, input_lengths,target_variables, target_lengths, model: Seq2seq,\
                          template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list):
         decoder_outputs, decoder_hidden, symbols_list = \
                                       model(input_variable = input_variables,
@@ -65,7 +78,8 @@ class SupervisedTrainer(object):
                                       class_list = self.class_list,
                                       num_list = num_list,
                                       fix_rng = self.fix_rng,
-                                      use_rule_old = False)
+                                      use_rule_old = False,
+                                      target_lengths = target_lengths)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -79,6 +93,16 @@ class SupervisedTrainer(object):
 
         seq = symbols_list
         seq_var = torch.cat(seq, 1)
+
+        for i in range(batch_size):
+            num_list_single = num_list[i]
+            old_temp = [self.class_list[id] for id in seq_var[i]]
+            old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+
+            new_temp = [self.class_list[id] for id in target_variables[i]]
+            new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+
+            print(f"  {num_list_single}: {''.join(old_str)} ? {''.join(new_str)}")
 
         self.loss.reset()
         for step, step_output in enumerate(decoder_outputs):

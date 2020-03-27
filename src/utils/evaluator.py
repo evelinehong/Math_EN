@@ -203,7 +203,8 @@ class Evaluator(object):
                                         class_list = self.decode_classes_list,
                                         num_list = batch_num_list,
                                         fix_rng=fix_rng,
-                                        use_rule_old=use_rule_old)
+                                        use_rule_old=use_rule_old,
+                                        target_lengths=None)
 
 
             seqlist = symbols_list

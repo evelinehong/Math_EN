@@ -146,7 +146,7 @@ class DecoderRNN_3(BaseRNN):
 
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                 max_length,  function, num_list, fix_rng):
+                                                 max_length,  function, num_list, fix_rng, target_lengths):
         '''
         decoder_input: batch x 1
         max_length: including END
@@ -195,6 +195,7 @@ class DecoderRNN_3(BaseRNN):
         mask_constant[:, filters_constant] = 0
 
         ended = torch.zeros(batch_size, dtype=torch.bool)
+        digits_remaining = torch.tensor(list(map(lambda ls: len(ls) + 1, num_list)))
         is_digit_step = torch.ones(batch_size, dtype=torch.bool)
         open_brackets = torch.zeros(batch_size, dtype=torch.int)
         for di in range(max_length):
@@ -222,6 +223,8 @@ class DecoderRNN_3(BaseRNN):
                     if is_digit_step[i]:
                         mask_step[i, filters_op] = 0
                         mask_step[i, self.class_dict[')']] = 0
+                        if digits_remaining[i] == 0:
+                            mask_step[i, filters_digit] = 0
                     else:
                         mask_step[i, filters_digit] = 0
                         mask_step[i, self.class_dict['(']] = 0
@@ -235,15 +238,6 @@ class DecoderRNN_3(BaseRNN):
                 mask = mask * mask_step
                 # mask = mask * mask_constant
 
-                mask_end = torch.ones((batch_size, classes_len), dtype=torch.bool)
-                if di == max_length - 1:
-                    for i in range(batch_size):
-                         if not ended[i]:
-                            all_except_end = list(range(classes_len))
-                            all_except_end.remove(self.filter_END())
-                            mask_end[i, all_except_end] = 0
-                mask = mask * mask_end
-
             # fixRng-like:
             # force EOS if greater than twice num_list length-1 (+2 for occasional constants)
             # force not EOS if less than half num_list length (make configurable?)
@@ -255,32 +249,42 @@ class DecoderRNN_3(BaseRNN):
                 for i in range(batch_size):
                     all_except_end = list(range(classes_len))
                     all_except_end.remove(self.filter_END())
-                    if di == max_len[i] or di == max_length - 1:
-                        if not ended[i] and torch.any(mask[i, self.filter_END()] == 1):
+                    if target_lengths is not None:
+                        if di == target_lengths[i]-1:
                             mask_rng[i, all_except_end] = 0
-                    elif di < min_len[i]:
-                        if torch.any(mask[i, all_except_end] == 1): # only if there's another possible symbol
+                            mask[i, self.filter_END()] = 1
+                        elif di < target_lengths[i]-1:
                             mask_rng[i, self.filter_END()] = 0
+                    else:
+                        if di == max_len[i] or di == max_length - 1:
+                            if not ended[i] and mask[i, self.filter_END()] == 1:
+                                mask_rng[i, all_except_end] = 0
+                        elif di < min_len[i]:
+                            if torch.any(mask[i, all_except_end] == 1): # only if there's another possible symbol
+                                mask_rng[i, self.filter_END()] = 0
                 mask = mask * mask_rng
 
             for i in range(batch_size):
                 if torch.all(mask[i] == 0):
-                    print(f"PROBLEM: mask is all zero, idx {di}, {max_length}, {num_list[i]}")
+                    print(f"PROBLEM: mask is all zero, di {di}, max_length {max_length}, num_list {num_list[i]}, ")
                     sys.exit(1)
                 
             mask[mask == 0] = 1e-12
 
             if self.use_cuda:
                 mask = mask.cuda()
-            step_output = mask * step_output
-            step_output = torch.log(step_output)
+            masked_step_output = step_output * mask
+            masked_step_output = torch.log(masked_step_output)
 
             if self.use_rule_old == False:
-                symbols = self.decode(di, step_output)
+                symbols = self.decode(di, masked_step_output)
             else:
-                step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output)
+                masked_step_output, symbols = self.decode_rule(di, sequence_symbols_list, masked_step_output)
 
-            _, preds = torch.max(step_output, 1)
+            preds = symbols.flatten()
+            generated_digit = isin(preds, torch.tensor(filters_digit).cuda()).int().cpu()
+            digits_remaining -= generated_digit
+
             is_digit_step = isin(preds, torch.tensor(np.append(filters_op, self.class_dict['('])).cuda()) # next step is digit if we had op or (
             open_brackets[preds == self.class_dict['(']] += 1
             open_brackets[preds == self.class_dict[')']] -= 1
@@ -288,10 +292,10 @@ class DecoderRNN_3(BaseRNN):
 
             decoder_input = self.symbol_norm(symbols)
 
-            decoder_outputs_list.append(step_output)
+            decoder_outputs_list.append(masked_step_output)
             sequence_symbols_list.append(symbols)
 
-            ended = ended | (symbols.flatten().cpu() == self.class_dict['END_token']).bool()
+            ended = ended | (preds.cpu() == self.class_dict['END_token']).bool()
 
         return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 
@@ -299,7 +303,7 @@ class DecoderRNN_3(BaseRNN):
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, template_flag=True,\
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
                 vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None,
-                fix_rng=False, use_rule_old=False):
+                fix_rng=False, use_rule_old=False, target_lengths=None):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
@@ -344,7 +348,7 @@ class DecoderRNN_3(BaseRNN):
             decoder_input = pad_var#.unsqueeze(1) # batch x 1
             #pdb.set_trace()
             return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                  max_length, function, num_list, fix_rng)
+                                                  max_length, function, num_list, fix_rng, target_lengths)
 
 
     def rule(self, symbol):

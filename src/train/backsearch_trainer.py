@@ -6,7 +6,7 @@ import numpy as np
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
-from .diagnosis_multistep import ExprTree
+from .diagnosis_multistep import ExprTree, DIFF_THRESHOLD
 
 import torch
 from torch import optim
@@ -67,51 +67,48 @@ class BackTrainer(object):
         best_fix_list = []
         for pred, gt, all_prob, item_id, num_list_single in zip(preds, gts, all_probs, ids, num_list):
             end_idx = self.class_dict['END_token']
+            fix = []
             if end_idx in pred.tolist():
                 l = pred.tolist().index(end_idx)
-            else:
-                return None
+                pred = pred[:l]
+                all_prob = all_prob[:, 2:]
 
-            pred = pred[:l]
-            all_prob = all_prob[:, 2:]
+                fix_source_str = ""
+                fix_step = -1
 
-            fix = []
-            fix_source_str = ""
-            fix_step = -1
-
-            if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
-                fix = self.fix_buffer[item_id][0]
-                fix_source_str = "buffer"
-            else:
-                expr_tree_pred = [x - 2 for x in pred]  # convert index
-                # prob = all_prob[range(l), pred]
-                # pred_str = [id2sym(x) for x in pred]
-
-                tokens = list(zip(expr_tree_pred, all_prob))
-                etree = ExprTree(num_list_single, class_list_expr)
-                etree.parse(tokens)
-
-                if abs(etree.res()[0] - gt) <= 1e-5:
-                    fix = list(pred)
-                    fix_source_str = "no fix needed"
+                if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
+                    fix = self.fix_buffer[item_id][0]
+                    fix_source_str = "buffer"
                 else:
-                    output = etree.fix(gt, n_step=n_step)
-                    if output:
-                        (output, fix_step) = output
-                        fix = [int(x + 2) for x in output[0]]
-                        fix_source_str = "fix found"
+                    expr_tree_pred = [x - 2 for x in pred]  # convert index
+                    # prob = all_prob[range(l), pred]
+                    # pred_str = [id2sym(x) for x in pred]
 
-            if len(fix) > 0:
-                self.fix_buffer[item_id].append(fix)
-                if DEBUG:
-                    old_temp = [self.class_list[id] for id in pred]
-                    old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+                    tokens = list(zip(expr_tree_pred, all_prob))
+                    etree = ExprTree(num_list_single, class_list_expr)
+                    etree.parse(tokens)
 
-                    new_ids = fix
-                    new_temp = [self.class_list[id] for id in new_ids]
-                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+                    if abs(etree.res()[0] - gt) <= DIFF_THRESHOLD:
+                        fix = list(pred)
+                        fix_source_str = "no fix needed"
+                    else:
+                        output = etree.fix(gt, n_step=n_step)
+                        if output:
+                            (output, fix_step) = output
+                            fix = [int(x + 2) for x in output[0]]
+                            fix_source_str = "fix found"
 
-                    print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {''.join(old_str)} => {''.join(new_str)} = {gt}")
+                if len(fix) > 0:
+                    self.fix_buffer[item_id].append(fix)
+                    if DEBUG:
+                        old_temp = [self.class_list[id] for id in pred]
+                        old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+
+                        new_ids = fix
+                        new_temp = [self.class_list[id] for id in new_ids]
+                        new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+
+                        print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {''.join(old_str)} => {''.join(new_str)} = {gt}")
 
             best_fix_list.append(fix)
         return best_fix_list
@@ -128,7 +125,7 @@ class BackTrainer(object):
             new_variable.append(tmp)
         return Variable(torch.LongTensor(np.array(new_variable)))
 
-    def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model, \
+    def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model: Seq2seq, \
                      template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions, ids):
         # decoder_outputs: expr_len (list) * batch_size * classes
         # symbols_list: expr_len (list) * batch_size * 1
@@ -147,7 +144,8 @@ class BackTrainer(object):
                   class_list=self.class_list,
                   num_list=num_list,
                   fix_rng=self.fix_rng,
-                  use_rule_old=False)
+                  use_rule_old=False,
+                  target_lengths=None)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
