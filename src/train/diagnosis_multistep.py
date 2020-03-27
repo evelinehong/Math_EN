@@ -82,6 +82,10 @@ class LeafNode:
         return -1 * np.sum(np.exp(self.all_prob) * self.all_prob)
 
     def sample(self):
+        if self.symbol == '(' or self.symbol == ')':
+            self.prev_symbol_id = self.symbol_id
+            return self.symbol_id
+
         # self.all_prob[self.symbol_id] = np.log(1e-30)
         # self.all_prob = self.all_prob - np.log(np.sum(np.exp(self.all_prob)))
         all_prob = np.exp(self.all_prob)
@@ -89,10 +93,19 @@ class LeafNode:
         # zero out impossible vars
         for (idx, k) in enumerate(self.class_list_expr):
             if 'temp' in k:
-                if (ord(k[5]) - ord('ta') >= len(self.num_list_single)):
+                if (ord(k[5]) - ord('a') >= len(self.num_list_single)):
                     all_prob[idx] = 0
             if '(' == k or ')' == k:
                 all_prob[idx] = 0
+
+        if 'temp' in self.symbol or 'PI' == self.symbol or self.symbol.isdigit():
+            for (idx, k) in enumerate(self.class_list_expr):
+                if not ('temp' in k or 'PI' == k or k.isdigit()):
+                    all_prob[idx] = 0
+        else:
+            for (idx, k) in enumerate(self.class_list_expr):
+                if 'temp' in k or 'PI' == k or k.isdigit():
+                    all_prob[idx] = 0
 
         # zero out self, if there's some other valid symbol
         # if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
@@ -219,7 +232,7 @@ class ExprTree:
                 target_idx = np.argmax(temp_diff < DIFF_THRESHOLD)
                 target_id = self.class_list_expr.index('temp_' + (chr(ord('a') + target_idx)))
                 change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
-            elif abs(target - 3.14) < 1e-2:
+            elif abs(target - 3.14) < DIFF_THRESHOLD:
                 target_id = self.class_list_expr.index('PI')
                 change = PrioritizedItem(node.prob - node.all_prob[target_id], (node, target, target_id))
             else:

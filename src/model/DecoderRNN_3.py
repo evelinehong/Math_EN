@@ -161,17 +161,18 @@ class DecoderRNN_3(BaseRNN):
 
         batch_size = decoder_input.size(0)
         classes_len = len(self.class_list)
-        mask_op = torch.ones((batch_size, classes_len), dtype=torch.bool)
+        # mask_op = torch.ones((batch_size, classes_len), dtype=torch.bool)
         filters_op = np.append(self.filter_op(), self.filter_END())
-        mask_op[:,filters_op] = 0
+        # mask_op[:,filters_op] = 0
+        # mask_op[:,self.filter_END()] = 0
 
-        mask_digit = torch.ones((batch_size, classes_len), dtype=torch.bool)
+        #mask_digit = torch.ones((batch_size, classes_len), dtype=torch.bool)
         filters_digit = []
         for k,v in self.class_dict.items():
             if 'temp' in k or 'PI' == k or k.isdigit():
                 filters_digit.append(v)
         filters_digit = np.array(filters_digit)
-        mask_digit[:, filters_digit] = 0
+        #mask_digit[:, filters_digit] = 0
 
         mask_temp = torch.ones((batch_size, classes_len), dtype=torch.bool)
 
@@ -223,8 +224,6 @@ class DecoderRNN_3(BaseRNN):
                     if is_digit_step[i]:
                         mask_step[i, filters_op] = 0
                         mask_step[i, self.class_dict[')']] = 0
-                        if digits_remaining[i] == 0:
-                            mask_step[i, filters_digit] = 0
                     else:
                         mask_step[i, filters_digit] = 0
                         mask_step[i, self.class_dict['(']] = 0
@@ -274,6 +273,7 @@ class DecoderRNN_3(BaseRNN):
             if self.use_cuda:
                 mask = mask.cuda()
             masked_step_output = step_output * mask
+            masked_step_output /= masked_step_output.sum()
             masked_step_output = torch.log(masked_step_output)
 
             if self.use_rule_old == False:
@@ -292,6 +292,7 @@ class DecoderRNN_3(BaseRNN):
 
             decoder_input = self.symbol_norm(symbols)
 
+            step_output = torch.log(step_output)
             decoder_outputs_list.append(masked_step_output)
             sequence_symbols_list.append(symbols)
 
