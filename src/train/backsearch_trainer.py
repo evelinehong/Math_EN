@@ -76,30 +76,31 @@ class BackTrainer(object):
                 fix_source_str = ""
                 fix_step = -1
 
-                if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
-                    fix = self.fix_buffer[item_id][0]
-                    fix_source_str = "buffer"
+
+                expr_tree_pred = [x - 2 for x in pred]  # convert index
+                # prob = all_prob[range(l), pred]
+                # pred_str = [id2sym(x) for x in pred]
+
+                tokens = list(zip(expr_tree_pred, all_prob))
+                etree = ExprTree(num_list_single, class_list_expr)
+                etree.parse_postfix(tokens)
+
+                if abs(etree.res()[0] - gt) <= DIFF_THRESHOLD:
+                    fix = list(pred)
+                    fix_source_str = "no fix needed"
                 else:
-                    expr_tree_pred = [x - 2 for x in pred]  # convert index
-                    # prob = all_prob[range(l), pred]
-                    # pred_str = [id2sym(x) for x in pred]
+                    output = etree.fix(gt, n_step=n_step)
+                    if output:
+                        (output, fix_step) = output
+                        fix = [int(x + 2) for x in output[0]]
+                        fix_source_str = "fix found"
+                if len(fix) > 0:
+                    self.fix_buffer[item_id].append(fix)
 
-                    tokens = list(zip(expr_tree_pred, all_prob))
-                    etree = ExprTree(num_list_single, class_list_expr)
-                    etree.parse_postfix(tokens)
-
-                    if abs(etree.res()[0] - gt) <= DIFF_THRESHOLD:
-                        fix = list(pred)
-                        fix_source_str = "no fix needed"
-                    else:
-                        output = etree.fix(gt, n_step=n_step)
-                        if output:
-                            (output, fix_step) = output
-                            fix = [int(x + 2) for x in output[0]]
-                            fix_source_str = "fix found"
-
-                    if len(fix) > 0:
-                        self.fix_buffer[item_id].append(fix)
+                if len(fix) == 0:
+                    if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
+                        fix = self.fix_buffer[item_id][0]
+                        fix_source_str = "buffer"
 
                 if len(fix) > 0 and DEBUG:
                     old_temp = [self.class_list[id] for id in pred]

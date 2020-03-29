@@ -73,7 +73,7 @@ def backsearch():
                    decode_classes_list = data_loader.decode_classes_list,
                    cuda_use = args.cuda_use,
                    loss = loss,
-                   print_every = 10,
+                   print_every = 1,
                    teacher_schedule = False,
                    checkpoint_dir_name = args.checkpoint_dir_name,
                    fix_rng = args.fix_rng,
