@@ -231,6 +231,8 @@ class DecoderRNN_3(BaseRNN):
                         mask_step[i, self.filter_END()] = 0
                     if generated_nums[i] - 1 !=  generated_ops[i]:
                         mask_step[i, self.filter_END()] = 0
+                    if di < max_lengths[i]:
+                        mask_step[i, self.filter_END()] = 0
                     if di == max_lengths[i]:
                         if not ended[i]:
                             all_except_end = list(range(classes_len))
