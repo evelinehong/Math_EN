@@ -270,7 +270,7 @@ class DecoderRNN_3(BaseRNN):
             decoder_input = self.symbol_norm(symbols)
 
             step_output = torch.log(step_output)
-            decoder_outputs_list.append(masked_step_output)
+            decoder_outputs_list.append(step_output)
             sequence_symbols_list.append(symbols)
 
             ended = ended | (preds.cpu() == self.class_dict['END_token']).bool()
