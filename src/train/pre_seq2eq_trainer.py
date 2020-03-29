@@ -95,17 +95,17 @@ class SupervisedTrainer(object):
         seq = symbols_list
         seq_var = torch.cat(seq, 1)
 
-        for i in range(batch_size):
-            num_list_single = num_list[i]
-            old_temp = [self.class_list[id] for id in seq_var[i]]
-            old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
-            old_str = old_str[:old_str.index("END_token")]
-
-            new_temp = [self.class_list[id] for id in target_variables[i]]
-            new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
-            new_str = new_str[:new_str.index("END_token")]
-
-            print(f"{num_list_single}: {' '.join(old_str)} =?= {' '.join(new_str)}")
+        # for i in range(batch_size):
+        #     num_list_single = num_list[i]
+        #     old_temp = [self.class_list[id] for id in seq_var[i]]
+        #     old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+        #     old_str = old_str[:old_str.index("END_token")]
+        #
+        #     new_temp = [self.class_list[id] for id in target_variables[i]]
+        #     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+        #     new_str = new_str[:new_str.index("END_token")]
+        #
+        #     print(f"{num_list_single}: {' '.join(old_str)} =?= {' '.join(new_str)}")
 
         self.loss.reset()
         for step, step_output in enumerate(decoder_outputs):

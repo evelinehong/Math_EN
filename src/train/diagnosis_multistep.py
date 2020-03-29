@@ -222,6 +222,30 @@ class ExprTree:
         self.root.res()
         return self.root
 
+    def parse_postfix(self, tokens=None):
+        if tokens is not None:
+            tokens = [LeafNode(*tok, self.class_list_expr, self.num_list_single) for tok in tokens]
+            self.tokens = tokens
+        else:
+            tokens = self.tokens
+        values = []
+        for token in tokens:
+            if 'temp' in token.symbol or 'PI' == token.symbol or token.symbol.isdigit():
+                values.append(token)
+            else:
+                op = token
+                right = values.pop()
+                left = values.pop()
+                new_node = Node(left, right, op)
+                op.parent = new_node
+                right.parent = new_node
+                left.parent = new_node
+                values.append(new_node)
+
+        self.root = values.pop()
+        self.root.res()
+        return self.root
+
     def res(self):
         return self.root.res()
 
@@ -297,19 +321,18 @@ class ExprTree:
 
             # change op
             ori_op = op.symbol
+            ori_op_id = op.symbol_id
             token_idx = self.tokens.index(op)
-            sub_target = None
             for new_op in sym2priority.keys():
                 if new_op == ori_op:
                     continue
-                new_str = [str(tok.res()[0]) for tok in self.tokens]
-                new_str[token_idx] = "**" if new_op=="^" else new_op
+                op.symbol_id = self.class_list_expr.index(new_op)
                 try:
-                    new_res = eval(''.join(new_str))
-                    if abs(new_res - gt) < DIFF_THRESHOLD:
-                        sub_target = new_op
-                        target_id = self.class_list_expr.index(sub_target)
-                        change = PrioritizedItem(op.prob - op.all_prob[target_id], (op, sub_target, target_id))
+                    node._res = None
+                    new_res = node.res()[0]
+                    if abs(new_res - target) < DIFF_THRESHOLD:
+                        target_id = self.class_list_expr.index(new_op)
+                        change = PrioritizedItem(op.prob - op.all_prob[target_id], (op, target, target_id))
 
                         if DEBUG and len(change.item) >= 3:
                             changed_token_ids = old_ids.copy()
@@ -319,6 +342,9 @@ class ExprTree:
                         queue.put(change)
                 except:
                     pass
+            op.symbol_id = ori_op_id #restore
+            node._res = None
+            node.res()
 
         return None
 

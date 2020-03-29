@@ -86,7 +86,7 @@ class BackTrainer(object):
 
                     tokens = list(zip(expr_tree_pred, all_prob))
                     etree = ExprTree(num_list_single, class_list_expr)
-                    etree.parse(tokens)
+                    etree.parse_postfix(tokens)
 
                     if abs(etree.res()[0] - gt) <= DIFF_THRESHOLD:
                         fix = list(pred)
@@ -108,7 +108,7 @@ class BackTrainer(object):
                         new_temp = [self.class_list[id] for id in new_ids]
                         new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
 
-                        print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {''.join(old_str)} => {''.join(new_str)} = {gt}")
+                        print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
 
             best_fix_list.append(fix)
         return best_fix_list
@@ -145,7 +145,7 @@ class BackTrainer(object):
                   num_list=num_list,
                   fix_rng=self.fix_rng,
                   use_rule_old=False,
-                  target_lengths=None)
+                  target_lengths=target_lengths)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
