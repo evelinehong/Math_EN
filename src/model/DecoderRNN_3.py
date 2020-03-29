@@ -195,8 +195,8 @@ class DecoderRNN_3(BaseRNN):
         ended = torch.zeros(batch_size, dtype=torch.bool)
         generated_ops = torch.zeros(batch_size, dtype=torch.int)
         generated_nums = torch.zeros(batch_size, dtype=torch.int)
-        target_lengths = target_lengths - 1  # exclude END
-        target_lengths -= (target_lengths % 2 == 0) # force odd
+        max_lengths = target_lengths - 1  # exclude END
+        max_lengths -= (max_lengths % 2 == 0) # force odd
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, function=function)
@@ -221,20 +221,21 @@ class DecoderRNN_3(BaseRNN):
                 for i in range(batch_size):
                     if di == 0 or di == 1:
                         mask_step[i, filters_op] = 0 # first two elements are numbers
-                    if di == target_lengths[i] - 1 and target_lengths[i] > 1:
-                        mask_step[i, filters_digit] = 0  # last is an operator
                     if generated_nums[i] - 1 ==  generated_ops[i]:
                         mask_step[i, filters_op] = 0  # number of ops cannot be greater than number of nums
-                    if generated_nums[i] == (target_lengths[i]+1) / 2:
+                    if generated_nums[i] == (max_lengths[i]+1) / 2:
                         mask_step[i, filters_digit] = 0  # number of nums cannot be greater than (target_length+1)/2
 
 
-                    if di < target_lengths[i]:
+                    if di == 0:
                         mask_step[i, self.filter_END()] = 0
-                    if di == target_lengths[i]:
-                        all_except_end = list(range(classes_len))
-                        all_except_end.remove(self.filter_END())
-                        mask_step[i, all_except_end] = 0 # fix_length
+                    if generated_nums[i] - 1 !=  generated_ops[i]:
+                        mask_step[i, self.filter_END()] = 0
+                    if di == max_lengths[i]:
+                        if not ended[i]:
+                            all_except_end = list(range(classes_len))
+                            all_except_end.remove(self.filter_END())
+                            mask_step[i, all_except_end] = 0 # fix_length
 
                     if mask_const:
                         mask_step[i, filters_const] = 0  # for the first iterations, do not generate 1 and 3.14

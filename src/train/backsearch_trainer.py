@@ -274,8 +274,8 @@ class BackTrainer(object):
                     target_variables = target_variables.cuda()
 
                 mask_const = False
-                if batch_idx < 2 and epoch == 1:
-                    mask_const = True
+                # if batch_idx < 2 and epoch == 1:
+                #     mask_const = True
 
                 loss, com_list = self._train_batch(input_variables=input_variables,
                                                    input_lengths=input_lengths,
