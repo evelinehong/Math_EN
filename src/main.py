@@ -86,7 +86,7 @@ def backsearch():
              data_loader = data_loader,
              batch_size = 256,
              n_epoch = 200,
-             template_flag = False,
+             template_flag = True,
              resume = args.resume,
              optimizer = None,
              mode = args.mode,
