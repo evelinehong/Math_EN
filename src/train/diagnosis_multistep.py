@@ -173,54 +173,55 @@ class ExprTree:
     # https://en.wikipedia.org/wiki/Shunting-yard_algorithm
     # https://www.geeksforgeeks.org/expression-evaluation/
     def parse(self, tokens=None):
-        if tokens is not None:
-            tokens = [LeafNode(*tok, self.class_list_expr, self.num_list_single) for tok in tokens]
-            self.tokens = tokens
-        else:
-            tokens = self.tokens
-        values = []
-        operators = []
-        for token in tokens:
-            if 'temp' in token.symbol or 'PI' == token.symbol or token.symbol.isdigit():
-                values.append(token)
-            elif '(' == token.symbol:
-                operators.append(token)
-            elif ')' == token.symbol:
-                while operators[-1].symbol != '(':
-                    op = operators.pop()
-                    right = values.pop()
-                    left = values.pop()
-                    new_node = Node(left, right, op)
-                    op.parent = new_node
-                    right.parent = new_node
-                    left.parent = new_node
-                    values.append(new_node)
-                operators.pop() # discard left parenthesis
-            else:
-                while len(operators) > 0 and operators[-1].priority >= token.priority:
-                    op = operators.pop()
-                    right = values.pop()
-                    left = values.pop()
-                    new_node = Node(left, right, op)
-                    op.parent = new_node
-                    right.parent = new_node
-                    left.parent = new_node
-                    values.append(new_node)
-                operators.append(token)
-
-        while len(operators) > 0:
-            op = operators.pop()
-            right = values.pop()
-            left = values.pop()
-            new_node = Node(left, right, op)
-            op.parent = new_node
-            right.parent = new_node
-            left.parent = new_node
-            values.append(new_node)
-
-        self.root = values.pop()
-        self.root.res()
-        return self.root
+        self.parse_postfix(tokens)
+    #     if tokens is not None:
+    #         tokens = [LeafNode(*tok, self.class_list_expr, self.num_list_single) for tok in tokens]
+    #         self.tokens = tokens
+    #     else:
+    #         tokens = self.tokens
+    #     values = []
+    #     operators = []
+    #     for token in tokens:
+    #         if 'temp' in token.symbol or 'PI' == token.symbol or token.symbol.isdigit():
+    #             values.append(token)
+    #         elif '(' == token.symbol:
+    #             operators.append(token)
+    #         elif ')' == token.symbol:
+    #             while operators[-1].symbol != '(':
+    #                 op = operators.pop()
+    #                 right = values.pop()
+    #                 left = values.pop()
+    #                 new_node = Node(left, right, op)
+    #                 op.parent = new_node
+    #                 right.parent = new_node
+    #                 left.parent = new_node
+    #                 values.append(new_node)
+    #             operators.pop() # discard left parenthesis
+    #         else:
+    #             while len(operators) > 0 and operators[-1].priority >= token.priority:
+    #                 op = operators.pop()
+    #                 right = values.pop()
+    #                 left = values.pop()
+    #                 new_node = Node(left, right, op)
+    #                 op.parent = new_node
+    #                 right.parent = new_node
+    #                 left.parent = new_node
+    #                 values.append(new_node)
+    #             operators.append(token)
+    #
+    #     while len(operators) > 0:
+    #         op = operators.pop()
+    #         right = values.pop()
+    #         left = values.pop()
+    #         new_node = Node(left, right, op)
+    #         op.parent = new_node
+    #         right.parent = new_node
+    #         left.parent = new_node
+    #         values.append(new_node)
+    #
+    #     self.root = values.pop()
+    #     self.root.res()
+    #     return self.root
 
     def parse_postfix(self, tokens=None):
         if tokens is not None:

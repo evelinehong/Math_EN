@@ -14,7 +14,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import pdb
 
-DEBUG = False
+DEBUG = True
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -98,17 +98,18 @@ class BackTrainer(object):
                             fix = [int(x + 2) for x in output[0]]
                             fix_source_str = "fix found"
 
-                if len(fix) > 0:
-                    self.fix_buffer[item_id].append(fix)
-                    if DEBUG:
-                        old_temp = [self.class_list[id] for id in pred]
-                        old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+                    if len(fix) > 0:
+                        self.fix_buffer[item_id].append(fix)
 
-                        new_ids = fix
-                        new_temp = [self.class_list[id] for id in new_ids]
-                        new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+                if len(fix) > 0 and DEBUG:
+                    old_temp = [self.class_list[id] for id in pred]
+                    old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
 
-                        print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
+                    new_ids = fix
+                    new_temp = [self.class_list[id] for id in new_ids]
+                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+
+                    print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
 
             best_fix_list.append(fix)
         return best_fix_list
@@ -126,7 +127,7 @@ class BackTrainer(object):
         return Variable(torch.LongTensor(np.array(new_variable)))
 
     def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model: Seq2seq, \
-                     template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions, ids):
+                     template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions, ids, mask_const):
         # decoder_outputs: expr_len (list) * batch_size * classes
         # symbols_list: expr_len (list) * batch_size * 1
         decoder_outputs, decoder_hidden, symbols_list = \
@@ -145,7 +146,8 @@ class BackTrainer(object):
                   num_list=num_list,
                   fix_rng=self.fix_rng,
                   use_rule_old=False,
-                  target_lengths=target_lengths)
+                  target_lengths=target_lengths,
+                  mask_const=mask_const)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -252,7 +254,7 @@ class BackTrainer(object):
             total_r = 0
 
             model.train(True)
-            for batch_data_dict in batch_generator:
+            for batch_idx, batch_data_dict in enumerate(batch_generator):
                 step += 1
                 step_elapsed += 1
                 ids = batch_data_dict['batch_index']
@@ -271,6 +273,10 @@ class BackTrainer(object):
                     input_variables = input_variables.cuda()
                     target_variables = target_variables.cuda()
 
+                mask_const = False
+                if batch_idx < 2 and epoch == 1:
+                    mask_const = True
+
                 loss, com_list = self._train_batch(input_variables=input_variables,
                                                    input_lengths=input_lengths,
                                                    target_variables=target_variables,
@@ -283,7 +289,8 @@ class BackTrainer(object):
                                                    post_flag=post_flag,
                                                    num_list=num_list,
                                                    solutions=solutions,
-                                                   ids=ids)
+                                                   ids=ids,
+                                                   mask_const=mask_const)
 
                 right_count += com_list[0]
                 total_r += batch_size

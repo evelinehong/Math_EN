@@ -6,3 +6,4 @@ wandb/
 experiment/
 data/pg_seq_norm_False*
 .vscode/
+/data/pg_seq_norm_True_train.json
