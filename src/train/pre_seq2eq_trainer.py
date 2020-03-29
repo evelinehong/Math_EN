@@ -62,7 +62,7 @@ class SupervisedTrainer(object):
 
 
     def _train_batch(self, input_variables, input_lengths,target_variables, target_lengths, model: Seq2seq,\
-                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list):
+                         template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, mask_const):
         decoder_outputs, decoder_hidden, symbols_list = \
                                       model(input_variable = input_variables,
                                       input_lengths = input_lengths,
@@ -79,7 +79,8 @@ class SupervisedTrainer(object):
                                       num_list = num_list,
                                       fix_rng = self.fix_rng,
                                       use_rule_old = False,
-                                      target_lengths = target_lengths)
+                                      target_lengths = target_lengths,
+                                      mask_const = mask_const)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
         if self.cuda_use:
@@ -94,15 +95,17 @@ class SupervisedTrainer(object):
         seq = symbols_list
         seq_var = torch.cat(seq, 1)
 
-        # for i in range(batch_size):
-        #     num_list_single = num_list[i]
-        #     old_temp = [self.class_list[id] for id in seq_var[i]]
-        #     old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
-        #
-        #     new_temp = [self.class_list[id] for id in target_variables[i]]
-        #     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
-        #
-        #     print(f"  {num_list_single}: {''.join(old_str)} ? {''.join(new_str)}")
+        for i in range(batch_size):
+            num_list_single = num_list[i]
+            old_temp = [self.class_list[id] for id in seq_var[i]]
+            old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+            old_str = old_str[:old_str.index("END_token")]
+
+            new_temp = [self.class_list[id] for id in target_variables[i]]
+            new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+            new_str = new_str[:new_str.index("END_token")]
+
+            print(f"{num_list_single}: {' '.join(old_str)} =?= {' '.join(new_str)}")
 
         self.loss.reset()
         for step, step_output in enumerate(decoder_outputs):
@@ -168,7 +171,7 @@ class SupervisedTrainer(object):
             total_r = 0
 
             model.train(True)
-            for batch_data_dict in batch_generator:
+            for batch_idx, batch_data_dict in enumerate(batch_generator):
                 step += 1
                 step_elapsed += 1
                 input_variables = batch_data_dict['batch_encode_pad_idx']
@@ -185,6 +188,10 @@ class SupervisedTrainer(object):
                     input_variables = input_variables.cuda()
                     target_variables = target_variables.cuda()
 
+                mask_const = False
+                if batch_idx < 2 and epoch == 1:
+                    mask_const = True
+
                 loss, com_list = self._train_batch(input_variables = input_variables,
                                                    input_lengths = input_lengths,
                                                    target_variables = target_variables,
@@ -195,7 +202,8 @@ class SupervisedTrainer(object):
                                                    mode = mode,
                                                    batch_size = batch_size,
                                                    post_flag = post_flag,
-                                                   num_list = num_list)
+                                                   num_list = num_list,
+                                                   mask_const = mask_const)
 
 
                 right_count += com_list[0]

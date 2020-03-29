@@ -204,7 +204,8 @@ class Evaluator(object):
                                         num_list = batch_num_list,
                                         fix_rng=fix_rng,
                                         use_rule_old=use_rule_old,
-                                        target_lengths=None)
+                                        target_lengths=target_lengths,
+                                        mask_const=False)
 
 
             seqlist = symbols_list
