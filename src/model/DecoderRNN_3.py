@@ -229,8 +229,8 @@ class DecoderRNN_3(BaseRNN):
 
                     if di == 0:
                         mask_step[i, self.filter_END()] = 0
-                    if generated_nums[i] - 1 !=  generated_ops[i]:
-                        mask_step[i, self.filter_END()] = 0
+                    # if generated_nums[i] - 1 !=  generated_ops[i]:
+                    #     mask_step[i, self.filter_END()] = 0
                     if di < max_lengths[i]:
                         mask_step[i, self.filter_END()] = 0
                     if di == max_lengths[i]:
@@ -248,7 +248,9 @@ class DecoderRNN_3(BaseRNN):
 
             for i in range(batch_size):
                 if torch.all(mask[i] == 0):
-                    print(f"PROBLEM: mask is all zero, di {di}, max_length {max_length}, num_list {num_list[i]}, ")
+                    gen_temp = [self.class_list[id] for id in torch.cat(sequence_symbols_list, 1)[i]] if len(sequence_symbols_list)>0 else "[]"
+                    print(f"PROBLEM: mask is all zero, di {di}, max_length {max_length}, target_length {target_lengths[i]}, num_list {num_list[i]}, "
+                          f"generated_ops {generated_ops[i]}, generated_nums {generated_nums[i]}, mask_pad {mask_pad[i]}, mask_step {mask_step[i]}, gen_temp {gen_temp}")
                     sys.exit(1)
                 
             mask[mask == 0] = 1e-12

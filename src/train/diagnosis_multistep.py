@@ -10,7 +10,7 @@ sym2priority = {'+': 0, '-': 0, '*': 1, '/': 1, "^": 1}
 
 DIFF_THRESHOLD = 1e-5
 NAN_THRESHOLD = 10e7
-thres_nan = lambda x: x if (NAN_THRESHOLD > abs(x) > DIFF_THRESHOLD) else float('nan')
+thres_nan = lambda x: x if (NAN_THRESHOLD > abs(x) > DIFF_THRESHOLD and not np.iscomplex(x)) else float('nan')
 plus = lambda x,y: thres_nan(x + y)
 minus = lambda x,y: thres_nan(x - y)
 times = lambda x,y: thres_nan(x * y)
