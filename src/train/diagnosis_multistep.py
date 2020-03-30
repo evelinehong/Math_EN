@@ -16,8 +16,8 @@ minus = lambda x,y: thres_nan(x - y)
 times = lambda x,y: thres_nan(x * y)
 divide = lambda x,y: thres_nan(x / y if y != 0 else float('nan'))
 exp = lambda x,y: thres_nan(x ** y if abs(x) < 10000 and y<1000 else float('nan'))
-root = lambda x,y: thres_nan(exp(x, divide(1, y)))
-log = lambda x,base: thres_nan(math.log(x, base) if base != 0 and base != 1 and x > 0 else float('nan'))
+root = lambda x,y: thres_nan(exp(x, divide(1, y)) if x >= 0 else float('nan'))
+log = lambda x,base: thres_nan(math.log(x, base) if base > 0 and base != 1 and x > 0 else float('nan'))
 symbol2semantic= {'+': plus, '-': minus, '*': times, '/': divide, '^': exp}
 #symbol2semantic.update({x: eval(x) if x.isdigit()})
 inverse_op_left = {'+': minus, '-': plus, '*': divide, '/': times, '^': root}
