@@ -4,6 +4,8 @@ import time
 import shutil
 
 import torch
+import random
+import numpy as np
 
 class Checkpoint():
 
@@ -47,7 +49,10 @@ class Checkpoint():
                     'optimizer': self.optimizer,
                     'train_acc_list': self.train_acc_list,
                     'test_acc_list': self.test_acc_list,
-                    'loss_list': self.loss_list
+                    'loss_list': self.loss_list,
+                    'torch_rng': torch.random.get_rng_state(),
+                    'random_rng': random.getstate(),
+                    'np_rng': np.random.get_state()
                    },
                    os.path.join(path, self.TRAINER_STATE_NAME))
         torch.save(self.model, os.path.join(path, self.MODEL_NAME))
@@ -86,6 +91,9 @@ class Checkpoint():
         model = torch.load(os.path.join(path, cls.MODEL_NAME))
         model.flatten_parameters()
         optimizer = resume_checkpoint['optimizer']
+        torch.random.set_rng_state(resume_checkpoint['torch_rng'])
+        random.setstate(resume_checkpoint['random_rng'])
+        np.random.set_state(resume_checkpoint['np_rng'])
         return Checkpoint(model=model,
                           optimizer=optimizer,
                           epoch=resume_checkpoint['epoch'],

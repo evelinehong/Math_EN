@@ -101,7 +101,7 @@ class BackTrainer(object):
 
                 if len(fix) == 0:
                     if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
-                        fix = self.fix_buffer[item_id][0]
+                        fix = self.fix_buffer[item_id][-1]
                         fix_source_str = "buffer"
 
                 if len(fix) > 0 and DEBUG:
