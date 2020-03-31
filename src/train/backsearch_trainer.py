@@ -277,8 +277,8 @@ class BackTrainer(object):
                     target_variables = target_variables.cuda()
 
                 mask_const = False
-                # if batch_idx < 2 and epoch == 1:
-                #     mask_const = True
+                if batch_idx < 2 and epoch == 1:
+                    mask_const = True
 
                 loss, com_list = self._train_batch(input_variables=input_variables,
                                                    input_lengths=input_lengths,
@@ -371,7 +371,7 @@ class BackTrainer(object):
                 max_ans_acc = test_ans_acc
                 checkpoint.save_according_name("./experiment", 'best')
                 print(f"Checkpoint best saved! max acc: {max_ans_acc}")
-                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
+                #wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
                 wandb.save(f"./data/pg_seq_norm_False_train.json")
                 wandb.save(f"./data/pg_seq_norm_False_test.json")
 
