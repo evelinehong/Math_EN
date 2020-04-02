@@ -22,12 +22,12 @@ def get_args():
                             default='0000_0000')
     parser.add_argument('--load-name', type=str, dest='load_name',default='best')
     parser.add_argument('--mode', type=int, dest='mode', default=0)
-    parser.add_argument('--teacher-forcing-ratio', type=float, dest='teacher_forcing_ratio', default=1)
+    parser.add_argument('--teacher-forcing-ratio', type=float, dest='teacher_forcing_ratio', default=0)
     parser.add_argument('--run-flag', type=str, dest='run_flag',default='train_23k')
-    parser.add_argument('--post-flag', action='store_true', dest='post_flag', default=False)
+    parser.add_argument('--post-flag', action='store_true', dest='post_flag', default=True)
 
-    parser.add_argument('--fix-rng', action='store_true', dest='fix_rng', default=False)
-    parser.add_argument('--use-rule', action='store_true', dest='use_rule', default=False)
+    parser.add_argument('--fix-rng', action='store_true', dest='fix_rng', default=True)
+    parser.add_argument('--use-rule', action='store_true', dest='use_rule', default=True)
     parser.add_argument('--nstep', type=int, dest='n_step', default=1)
 
     parser.add_argument('--seed', default=123, type=int, help="numpy/torch seed")

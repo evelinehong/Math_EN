@@ -320,7 +320,7 @@ class SupervisedTrainer(object):
             defaults.pop('params', None)
             self.optimizer.optimizer = resume_optim.__class__(model.parameters(), **defaults)
 
-            start_epoch = resume_checkpoint.epoch
+            start_epoch = resume_checkpoint.epoch + 1
             start_step = resume_checkpoint.step
             self.train_acc_list = resume_checkpoint.train_acc_list
             self.test_acc_list = resume_checkpoint.test_acc_list

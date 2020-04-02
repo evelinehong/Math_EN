@@ -1,3 +1,5 @@
+import sys
+
 from config import *
 import pdb
 import os
@@ -14,10 +16,8 @@ from model import EncoderRNN, DecoderRNN_1, DecoderRNN_2, DecoderRNN_3, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
 import wandb
-wandb.init(project="mwp")
 
 args = get_args()
-
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -78,7 +78,7 @@ def backsearch():
                    decode_classes_list = data_loader.decode_classes_list,
                    cuda_use = args.cuda_use,
                    loss = loss,
-                   print_every = 1,
+                   print_every = 10,
                    teacher_schedule = False,
                    checkpoint_dir_name = args.checkpoint_dir_name,
                    fix_rng = args.fix_rng,
@@ -241,6 +241,10 @@ def step_three():
     print (test_temp_acc, test_ans_acc)
 
 if __name__ == "__main__":
+    if args.resume and args.id is not None:
+        print('resume must provide id')
+        sys.exit(1)
+    wandb.init(project="mwp-postfix", id=(args.id if args.resume else None))
     wandb.config.fix_rng = args.fix_rng
     wandb.config.use_rule = args.use_rule
     wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
