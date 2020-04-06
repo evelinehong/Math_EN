@@ -16,7 +16,7 @@ import pdb
 
 import wandb
 
-DEBUG = True
+DEBUG = False
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -89,7 +89,7 @@ class BackTrainer(object):
 
                 if abs(etree.res()[0] - gt) <= DIFF_THRESHOLD:
                     fix = list(pred)
-                    fix_source_str = "no fix needed"
+                    fix_source_str = "correct"
                 else:
                     output = etree.fix(gt, n_step=n_step)
                     if output:
@@ -102,17 +102,19 @@ class BackTrainer(object):
                 if len(fix) == 0:
                     if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
                         fix = self.fix_buffer[item_id][-1]
-                        fix_source_str = "buffer"
+                        fix_source_str = "fix in buffer"
 
-                if len(fix) > 0 and DEBUG:
+                if DEBUG:
                     old_temp = [self.class_list[id] for id in pred]
                     old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+                    if len(fix) > 0:
+                        new_ids = fix
+                        new_temp = [self.class_list[id] for id in new_ids]
+                        new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
 
-                    new_ids = fix
-                    new_temp = [self.class_list[id] for id in new_ids]
-                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
-
-                    print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
+                        print(f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
+                    # else:
+                    #     print(f"  no fix found, {num_list_single}, step {fix_step}: {' '.join(old_str)} != {gt}")
 
             best_fix_list.append(fix)
         return best_fix_list

@@ -1,3 +1,5 @@
+import sys
+
 from utils import *
 import numpy as np
 import queue as Q
@@ -82,12 +84,6 @@ class LeafNode:
         return -1 * np.sum(np.exp(self.all_prob) * self.all_prob)
 
     def sample(self):
-        if self.symbol == '(' or self.symbol == ')':
-            self.prev_symbol_id = self.symbol_id
-            return self.symbol_id
-
-        # self.all_prob[self.symbol_id] = np.log(1e-30)
-        # self.all_prob = self.all_prob - np.log(np.sum(np.exp(self.all_prob)))
         all_prob = np.exp(self.all_prob)
 
         # zero out impossible vars
@@ -95,8 +91,6 @@ class LeafNode:
             if 'temp' in k:
                 if (ord(k[5]) - ord('a') >= len(self.num_list_single)):
                     all_prob[idx] = 0
-            if '(' == k or ')' == k:
-                all_prob[idx] = 0
 
         if 'temp' in self.symbol or 'PI' == self.symbol or self.symbol.isdigit():
             for (idx, k) in enumerate(self.class_list_expr):
@@ -107,9 +101,13 @@ class LeafNode:
                 if 'temp' in k or 'PI' == k or k.isdigit():
                     all_prob[idx] = 0
 
+        if np.all(all_prob==0):
+            print(f"sampling all 0 {all_prob}")
+            sys.exit(1)
+
         # zero out self, if there's some other valid symbol
-        # if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
-        #     all_prob[self.symbol_id] = 0
+        if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
+            all_prob[self.symbol_id] = 0
 
         all_prob /= all_prob.sum()
         new_symbol = np.random.choice(range(len(self.class_list_expr)), p=all_prob)
@@ -358,6 +356,15 @@ class ExprTree:
 
         for i in range(n_step):
             if i > 0:
+                self.parse()
+
+            if DEBUG:
+                print(f"  fix step {i}: start with {self.token_list_to_str()[0]}")
+
+            fix = self.fix_1step(gt)
+            if fix is not None:
+                return fix, i + 1
+            else:
                 accept = False
                 while not accept:
                     n_sym_change = int(np.abs(np.random.normal(0, 1, 1)))
@@ -376,14 +383,6 @@ class ExprTree:
                     else:
                         for tok_id in token_ids:
                             self.tokens[tok_id].resume()
-                self.parse()
-
-            if DEBUG:
-                print(f"  fix step {i}: start with {self.token_list_to_str()[0]}")
-
-            fix = self.fix_1step(gt)
-            if fix is not None:
-                return fix, i + 1
 
                 # print([x.symbol for x in self.tokens])
         return None

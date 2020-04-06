@@ -241,7 +241,7 @@ def step_three():
     print (test_temp_acc, test_ans_acc)
 
 if __name__ == "__main__":
-    if args.resume and args.id is not None:
+    if args.resume and args.id is None:
         print('resume must provide id')
         sys.exit(1)
     wandb.init(project="mwp-postfix", id=(args.id if args.resume else None))
