@@ -17,7 +17,7 @@ def isin(ar1, ar2):
     return (ar1[..., None] == ar2).any(-1)
 
 def max_len_single(num_list):
-    return len(num_list)*2-1 + 6
+    return len(num_list)*2-1 + 2
 
 
 def mask_batch(batch_select, class_select):
@@ -204,8 +204,9 @@ class DecoderRNN_3(BaseRNN):
         ended = torch.zeros(batch_size, dtype=torch.bool)
         generated_ops = torch.zeros(batch_size, dtype=torch.int)
         generated_nums = torch.zeros(batch_size, dtype=torch.int)
-        max_lengths = target_lengths - 1  # exclude END
-        max_lengths -= (max_lengths % 2 == 0) # force odd
+        #max_lengths = target_lengths - 1  # exclude END
+        #max_lengths -= (max_lengths % 2 == 0) # force odd
+        max_lengths = [max_len_single(x) for x in num_list]
         max_lengths = torch.tensor(max_lengths)
 
         if self.use_cuda:
@@ -227,8 +228,10 @@ class DecoderRNN_3(BaseRNN):
             step_output = torch.exp(step_output) # batch_size * classes_len
 
             mask = torch.ones((batch_size, classes_len))
+            mask_training = torch.ones((batch_size, classes_len))
             if self.use_cuda:
                 mask = mask.cuda()
+                mask_training = mask_training.cuda()
 
             if self.use_rule:
                 mask *= mask_batch(ended, ~only_pad) # if ended, all except pad are 0
@@ -242,18 +245,17 @@ class DecoderRNN_3(BaseRNN):
                 if di == 0:
                     mask[:, self.filter_END()] = 0
 
-                # if generated_nums[i] - 1 !=  generated_ops[i]:
-                #     mask_step[i, self.filter_END()] = 0
-
-                mask *= mask_batch(di < max_lengths, only_end) # fix length, min
-                mask *= mask_batch(di == max_lengths * ~ended, ~only_end) # fix length, max
+                mask *= mask_batch(generated_nums - 1 != generated_ops, only_end)
+                #mask *= mask_batch(di < max_lengths, only_end) # fix length, min
+                #mask *= mask_batch(di == max_lengths * ~ended, ~only_end) # fix length, max
 
                 if mask_const:
-                    mask[:, filters_const] = 0  # for the first iterations, do not generate 1 and 3.14
+                    mask_training[:, filters_const] = 0  # for the first iterations, do not generate 1 and 3.14
+                    mask_training *= mask_batch(di < max_lengths/2, only_end)  # min length
 
                 mask = mask * mask_temp
 
-            if torch.any(~torch.any(mask.bool(), 1)):
+            if torch.any(torch.all(mask.bool()==0, 1)):
                 for i in range(batch_size):
                     if torch.all(mask[i] == 0):
                         gen_temp = [self.class_list[id] for id in torch.cat(sequence_symbols_list, 1)[i]] if len(sequence_symbols_list)>0 else "[]"
@@ -262,16 +264,20 @@ class DecoderRNN_3(BaseRNN):
                         sys.exit(1)
                 
             mask[mask == 0] = 1e-12
+            mask_training[mask_training == 0] = 1e-12
 
             if self.use_cuda:
                 mask = mask.cuda()
-            masked_step_output = step_output * mask
-            masked_step_output = torch.log(masked_step_output)
+            step_output = step_output * mask
+            training_step_output = step_output * mask_training
 
-            if self.use_rule_old == False:
-                symbols = self.decode(di, masked_step_output)
-            else:
-                masked_step_output, symbols = self.decode_rule(di, sequence_symbols_list, masked_step_output)
+            step_output = torch.log(step_output)
+            training_step_output = torch.log(training_step_output)
+
+            # if self.use_rule_old == False:
+            symbols = self.decode(di, training_step_output)
+            # else:
+            #     step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output)
 
             preds = symbols.flatten()
             generated_nums += isin(preds, torch.tensor(filters_digit).cuda()).int()
@@ -279,8 +285,7 @@ class DecoderRNN_3(BaseRNN):
 
             decoder_input = self.symbol_norm(symbols)
 
-            step_output = torch.log(step_output)
-            decoder_outputs_list.append(masked_step_output)
+            decoder_outputs_list.append(step_output)
             sequence_symbols_list.append(symbols)
 
             ended = ended | (preds == self.class_dict['END_token']).bool()

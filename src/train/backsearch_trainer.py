@@ -16,7 +16,7 @@ import pdb
 
 import wandb
 
-DEBUG = False
+DEBUG = True
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
