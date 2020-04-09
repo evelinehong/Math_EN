@@ -10,14 +10,14 @@ DEBUG = False
 sym2priority = {'+': 0, '-': 0, '*': 1, '/': 1, "^": 1}
 #sym2priority.update({str(x):2 if x.isdigit()})
 
-DIFF_THRESHOLD = 1e-5
+DIFF_THRESHOLD = 1e-7
 NAN_THRESHOLD = 10e7
 thres_nan = lambda x: x if (NAN_THRESHOLD > abs(x) > DIFF_THRESHOLD and not np.iscomplex(x)) else float('nan')
 plus = lambda x,y: thres_nan((x + y) if x != 0 and y != 0 else float('nan'))
 minus = lambda x,y: thres_nan((x - y) if y != 0 else float('nan'))
 times = lambda x,y: thres_nan((x * y) if x != 1 and y != 1 else float('nan'))
-divide = lambda x,y: thres_nan((x / y) if y != 0 and y != 1 else float('nan'))
-exp = lambda x,y: thres_nan((x ** y) if abs(x) < 1000 and abs(y) < 10 and x != 1 and y != 1 else float('nan'))
+divide = lambda x,y: thres_nan((x / y) if y != 0 and y != 1 and x != y else float('nan'))
+exp = lambda x,y: thres_nan((x ** y) if abs(x) < 1000 and abs(y) < 10 and (x-1>1e5) and (y-1>1e5) else float('nan'))
 root = lambda x,y: thres_nan(exp(x, divide(1, y)) if x >= 0 else float('nan'))
 log = lambda x,base: thres_nan(math.log(x, base) if base > 0 and base != 1 and x > 0 and x != 1 else float('nan'))
 symbol2semantic= {'+': plus, '-': minus, '*': times, '/': divide, '^': exp}
@@ -106,8 +106,8 @@ class LeafNode:
             sys.exit(1)
 
         # zero out self, if there's some other valid symbol
-        if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
-            all_prob[self.symbol_id] = 0
+        # if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
+        #     all_prob[self.symbol_id] = 0
 
         all_prob /= all_prob.sum()
         new_symbol = np.random.choice(range(len(self.class_list_expr)), p=all_prob)

@@ -204,10 +204,9 @@ class DecoderRNN_3(BaseRNN):
         ended = torch.zeros(batch_size, dtype=torch.bool)
         generated_ops = torch.zeros(batch_size, dtype=torch.int)
         generated_nums = torch.zeros(batch_size, dtype=torch.int)
-        #max_lengths = target_lengths - 1  # exclude END
-        #max_lengths -= (max_lengths % 2 == 0) # force odd
-        max_lengths = [max_len_single(x) for x in num_list]
-        max_lengths = torch.tensor(max_lengths)
+        target_length = target_lengths - 1  # exclude END
+        target_length -= (target_length % 2 == 0) # force odd
+        target_length = torch.tensor(target_length)
 
         if self.use_cuda:
             ended = ended.cuda()
@@ -217,7 +216,7 @@ class DecoderRNN_3(BaseRNN):
             only_end = only_end.cuda()
             only_digit = only_digit.cuda()
             only_op = only_op.cuda()
-            max_lengths = max_lengths.cuda()
+            target_length = target_length.cuda()
             mask_temp = mask_temp.cuda()
 
         for di in range(max_length):
@@ -240,18 +239,18 @@ class DecoderRNN_3(BaseRNN):
                 if di==0 or di==1:
                     mask[:, filters_op] = 0  # first two elements are numbers
                 mask *= mask_batch(generated_nums - 1 == generated_ops, only_op) # number of ops cannot be greater than number of nums
-                mask *= mask_batch(generated_nums == (max_lengths+1)/2, only_digit) # number of nums cannot be greater than (target_length+1)/2
+                mask *= mask_batch(generated_nums == (target_length+1)/2, only_digit) # number of nums cannot be greater than (target_length+1)/2
 
                 if di == 0:
                     mask[:, self.filter_END()] = 0
 
-                mask *= mask_batch(generated_nums - 1 != generated_ops, only_end)
-                #mask *= mask_batch(di < max_lengths, only_end) # fix length, min
-                #mask *= mask_batch(di == max_lengths * ~ended, ~only_end) # fix length, max
+                #mask *= mask_batch(generated_nums - 1 != generated_ops, only_end)
+                mask *= mask_batch(di < target_length, only_end) # fix length, min
+                mask *= mask_batch(di == target_length * ~ended, ~only_end) # fix length, max
 
                 if mask_const:
                     mask_training[:, filters_const] = 0  # for the first iterations, do not generate 1 and 3.14
-                    mask_training *= mask_batch(di < max_lengths/2, only_end)  # min length
+                    mask_training *= mask_batch(di < target_length/2, only_end)  # min length
 
                 mask = mask * mask_temp
 

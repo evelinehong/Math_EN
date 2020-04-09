@@ -96,13 +96,6 @@ class BackTrainer(object):
                         (output, fix_step) = output
                         fix = [int(x + 2) for x in output[0]]
                         fix_source_str = "fix found"
-                if len(fix) > 0:
-                    self.fix_buffer[item_id].append(fix)
-
-                if len(fix) == 0:
-                    if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
-                        fix = self.fix_buffer[item_id][-1]
-                        fix_source_str = "fix in buffer"
 
                 if DEBUG:
                     old_temp = [self.class_list[id] for id in pred]
@@ -133,100 +126,123 @@ class BackTrainer(object):
 
     def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model: Seq2seq, \
                      template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions, ids, mask_const):
-        # decoder_outputs: expr_len (list) * batch_size * classes
-        # symbols_list: expr_len (list) * batch_size * 1
-        decoder_outputs, decoder_hidden, symbols_list = \
-            model(input_variable=input_variables,
-                  input_lengths=input_lengths,
-                  target_variable=target_variables,
-                  template_flag=template_flag,
-                  teacher_forcing_ratio=teacher_forcing_ratio,
-                  mode=mode,
-                  use_rule=self.use_rule,
-                  use_cuda=self.cuda_use,
-                  vocab_dict=self.vocab_dict,
-                  vocab_list=self.vocab_list,
-                  class_dict=self.class_dict,
-                  class_list=self.class_list,
-                  num_list=num_list,
-                  fix_rng=self.fix_rng,
-                  use_rule_old=False,
-                  target_lengths=target_lengths,
-                  mask_const=mask_const)
-        # cuda
-        target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
-        if self.cuda_use:
-            target_variables = target_variables.cuda()
 
-        pad_in_classes_idx = self.decode_classes_dict['PAD_token']
-        batch_size = len(input_lengths)
+        # EXPLORE
+        with torch.no_grad():
+            # decoder_outputs: expr_len (list) * batch_size * classes
+            # symbols_list: expr_len (list) * batch_size * 1
+            decoder_outputs, decoder_hidden, symbols_list = \
+                model(input_variable=input_variables,
+                      input_lengths=input_lengths,
+                      target_variable=target_variables,
+                      template_flag=template_flag,
+                      teacher_forcing_ratio=teacher_forcing_ratio,
+                      mode=mode,
+                      use_rule=self.use_rule,
+                      use_cuda=self.cuda_use,
+                      vocab_dict=self.vocab_dict,
+                      vocab_list=self.vocab_list,
+                      class_dict=self.class_dict,
+                      class_list=self.class_list,
+                      num_list=num_list,
+                      fix_rng=self.fix_rng,
+                      use_rule_old=False,
+                      target_lengths=target_lengths,
+                      mask_const=mask_const)
+            # cuda
+            target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
+            if self.cuda_use:
+                target_variables = target_variables.cuda()
 
-        match = 0
-        total = 0
+            pad_in_classes_idx = self.decode_classes_dict['PAD_token']
+            batch_size = len(input_lengths)
 
-        seq = symbols_list
-        seq_var = torch.cat(seq, 1)
+            match = 0
+            total = 0
 
-        self.loss.reset()
+            seq = symbols_list
+            seq_var = torch.cat(seq, 1)
 
-        probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
-        preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
-        preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
-        res = solutions
+            probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
+            preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
+            preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
+            res = solutions
 
-        fix_list = self.find_fix(
-            preds.data.cpu().numpy(),
-            res,
-            probs.data.cpu().numpy(),
-            num_list,
-            ids,
-            self.n_step)
+            fix_list = self.find_fix(
+                preds.data.cpu().numpy(),
+                res,
+                probs.data.cpu().numpy(),
+                num_list,
+                ids,
+                self.n_step)
 
-        for step, step_output in enumerate(decoder_outputs):
-            fixed_step = torch.full((batch_size,), -1, dtype=torch.long)  # -1 ignored in NLLLoss
-            for i in range(batch_size):
-                if len(fix_list[i]):
-                    if step < len(fix_list[i]):
-                        fixed_step[i] = torch.tensor(fix_list[i][step])
-                    elif step == len(fix_list[i]):
+        learn_queue_fixes = []
+        learn_queue_idx = []
+        for i, new_fix in enumerate(fix_list):
+            total_fix_buffer = self.fix_buffer[ids[i]]
+            if len(new_fix) > 0:
+                if new_fix not in total_fix_buffer:
+                    total_fix_buffer.append(new_fix)
+            for fix in total_fix_buffer:
+                learn_queue_idx.append(i)
+                learn_queue_fixes.append(fix)
+
+        # UPDATE
+        mapo_batch_size = 64
+        mapo_last_batch_size = len(learn_queue_idx) % mapo_batch_size
+        mapo_batch_sizes = [mapo_batch_size]*(len(learn_queue_idx)//mapo_batch_size) + ([] if mapo_last_batch_size==0 else [mapo_last_batch_size])
+        pos = 0
+        total_avg_loss = 0
+        for mapo_batch_size in mapo_batch_sizes:
+            learn_queue_idx_batch = learn_queue_idx[pos:(pos + mapo_batch_size)]
+            learn_queue_fixes_batch = learn_queue_fixes[pos:(pos + mapo_batch_size)]
+
+            mapo_decoder_outputs, mapo_decoder_hidden, mapo_symbols_list = \
+                model(input_variable=input_variables[learn_queue_idx_batch],
+                      input_lengths=input_lengths[learn_queue_idx_batch],
+                      target_variable=target_variables[learn_queue_idx_batch],
+                      template_flag=template_flag,
+                      teacher_forcing_ratio=teacher_forcing_ratio,
+                      mode=mode,
+                      use_rule=self.use_rule,
+                      use_cuda=self.cuda_use,
+                      vocab_dict=self.vocab_dict,
+                      vocab_list=self.vocab_list,
+                      class_dict=self.class_dict,
+                      class_list=self.class_list,
+                      num_list=num_list[learn_queue_idx_batch],
+                      fix_rng=self.fix_rng,
+                      use_rule_old=False,
+                      target_lengths=target_lengths[learn_queue_idx_batch],
+                      mask_const=mask_const)
+
+            self.loss.reset()
+            for step, step_output in enumerate(mapo_decoder_outputs):
+                fixed_step = torch.full((mapo_batch_size,), -1, dtype=torch.long)  # -1 ignored in NLLLoss
+                for i in range(mapo_batch_size):
+                    if step < len(learn_queue_fixes_batch[i]):
+                        fixed_step[i] = torch.tensor(learn_queue_fixes_batch[i][step])
+                    elif step == len(learn_queue_fixes_batch[i]):
                         fixed_step[i] = self.class_dict['END_token']
                     else:
                         fixed_step[i] = self.class_dict['PAD_token']
 
-            if self.cuda_use:
-                step_output = step_output.cuda()
-                fixed_step = fixed_step.cuda()
+                if self.cuda_use:
+                    step_output = step_output.cuda()
+                    fixed_step = fixed_step.cuda()
 
-            # loss wrt fixed output
-            self.loss.eval_batch(step_output.contiguous().view(batch_size, -1), fixed_step)
+                # loss wrt fixed output
+                self.loss.eval_batch(step_output.contiguous().view(mapo_batch_size, -1), fixed_step)
 
-            # target not used in training, only metric:
-            if step < target_variables.size()[1]:
-                target = target_variables[:, step]
-                non_padding = target.ne(pad_in_classes_idx)
-                correct = seq[step].view(-1).eq(target).masked_select(non_padding).sum().item()  # data[0]
-                match += correct
-                total += non_padding.sum().item()  # .data[0]
+            pos += mapo_batch_size
 
-        right = 0
-        for i in range(batch_size):
-            for j in range(target_variables.size(1)):
-                # if target_variables[i][j].data[0] != pad_in_classes_idx  and \
-                # target_variables[i][j].data[0] == seq_var[i][j].data[0]:
-                if target_variables[i][j].item() != pad_in_classes_idx and \
-                        target_variables[i][j].item() == seq_var[i][j].item():
-                    continue
-                # elif target_variables[i][j].data[0] == 1:
-                elif target_variables[i][j].item() == 1:
-                    right += 1
-                    break
-                else:
-                    break
+            model.zero_grad()
+            self.loss.backward()
+            self.optimizer.step()
 
-        model.zero_grad()
-        self.loss.backward()
-        self.optimizer.step()
-        return self.loss.get_loss(), [right, match, total]
+            total_avg_loss += self.loss.get_loss()
+
+        return total_avg_loss/len(mapo_batch_sizes), [0, match, total]
 
     def _train_epoches(self, data_loader, model, batch_size, start_epoch, start_step, n_epoch, \
                        mode, template_flag, teacher_forcing_ratio, post_flag):
@@ -279,7 +295,7 @@ class BackTrainer(object):
                     target_variables = target_variables.cuda()
 
                 mask_const = False
-                if batch_idx < 2 and epoch == 1:
+                if epoch == 1:
                     mask_const = True
 
                 loss, com_list = self._train_batch(input_variables=input_variables,
@@ -319,63 +335,64 @@ class BackTrainer(object):
                     wandb.log({"epoch": epoch, "avg loss": print_loss_avg}, step=step)
 
             model.eval()
-            train_temp_acc, train_ans_acc = \
-                self.evaluator.evaluate(model=model,
-                                        data_loader=data_loader,
-                                        data_list=train_list,
-                                        template_flag=template_flag,
-                                        batch_size=batch_size,
-                                        evaluate_type=0,
-                                        use_rule=self.use_rule,
-                                        mode=mode,
-                                        post_flag=post_flag,
-                                        use_rule_old=False,
-                                        fix_rng=self.fix_rng)
-            # valid_temp_acc, valid_ans_acc =\
-            #                            self.evaluator.evaluate(model = model,
-            #                                                    data_loader = data_loader,
-            #                                                    data_list = valid_list,
-            #                                                    template_flag = template_flag,
-            #                                                    batch_size = batch_size,
-            #                                                    evaluate_type = 0,
-            #                                                    use_rule = self.use_rule,
-            #                                                    mode = mode,
-            #                                                    post_flag=post_flag,
-            #                                                    use-rule_old=False,
-            #                                                    fix_rng=self.fix_rng)
-            test_temp_acc, test_ans_acc = \
-                self.evaluator.evaluate(model=model,
-                                        data_loader=data_loader,
-                                        data_list=test_list,
-                                        template_flag=template_flag,
-                                        batch_size=batch_size,
-                                        evaluate_type=0,
-                                        use_rule=self.use_rule,
-                                        mode=mode,
-                                        post_flag=post_flag,
-                                        use_rule_old=False,
-                                        name_save="test",
-                                        fix_rng=self.fix_rng)
-            self.train_acc_list.append((epoch, step, train_ans_acc))
-            self.test_acc_list.append((epoch, step, test_ans_acc))
-            self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
+            with torch.no_grad():
+                train_temp_acc, train_ans_acc = \
+                    self.evaluator.evaluate(model=model,
+                                            data_loader=data_loader,
+                                            data_list=train_list,
+                                            template_flag=template_flag,
+                                            batch_size=batch_size,
+                                            evaluate_type=0,
+                                            use_rule=self.use_rule,
+                                            mode=mode,
+                                            post_flag=post_flag,
+                                            use_rule_old=False,
+                                            fix_rng=self.fix_rng)
+                # valid_temp_acc, valid_ans_acc =\
+                #                            self.evaluator.evaluate(model = model,
+                #                                                    data_loader = data_loader,
+                #                                                    data_list = valid_list,
+                #                                                    template_flag = template_flag,
+                #                                                    batch_size = batch_size,
+                #                                                    evaluate_type = 0,
+                #                                                    use_rule = self.use_rule,
+                #                                                    mode = mode,
+                #                                                    post_flag=post_flag,
+                #                                                    use-rule_old=False,
+                #                                                    fix_rng=self.fix_rng)
+                test_temp_acc, test_ans_acc = \
+                    self.evaluator.evaluate(model=model,
+                                            data_loader=data_loader,
+                                            data_list=test_list,
+                                            template_flag=template_flag,
+                                            batch_size=batch_size,
+                                            evaluate_type=0,
+                                            use_rule=self.use_rule,
+                                            mode=mode,
+                                            post_flag=post_flag,
+                                            use_rule_old=False,
+                                            name_save="test",
+                                            fix_rng=self.fix_rng)
+                self.train_acc_list.append((epoch, step, train_ans_acc))
+                self.test_acc_list.append((epoch, step, test_ans_acc))
+                self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
 
-            checkpoint = Checkpoint(model=model,
-                                    optimizer=self.optimizer,
-                                    epoch=epoch,
-                                    step=step,
-                                    train_acc_list=self.train_acc_list,
-                                    test_acc_list=self.test_acc_list,
-                                    loss_list=self.loss_list)
-            checkpoint.save_according_name("./experiment", "latest")
+                checkpoint = Checkpoint(model=model,
+                                        optimizer=self.optimizer,
+                                        epoch=epoch,
+                                        step=step,
+                                        train_acc_list=self.train_acc_list,
+                                        test_acc_list=self.test_acc_list,
+                                        loss_list=self.loss_list)
+                checkpoint.save_according_name("./experiment", "latest")
 
-            if test_ans_acc > max_ans_acc:
-                max_ans_acc = test_ans_acc
-                checkpoint.save_according_name("./experiment", 'best')
-                print(f"Checkpoint best saved! max acc: {max_ans_acc}")
-                #wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
-                wandb.save(f"./data/pg_seq_norm_False_train.json")
-                wandb.save(f"./data/pg_seq_norm_False_test.json")
+                if test_ans_acc > max_ans_acc:
+                    max_ans_acc = test_ans_acc
+                    checkpoint.save_according_name("./experiment", 'best')
+                    print(f"Checkpoint best saved! max acc: {max_ans_acc}")
+                    #wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
+                    wandb.save(f"./data/pg_seq_norm_False_train.json")
+                    wandb.save(f"./data/pg_seq_norm_False_test.json")
 
             # print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
