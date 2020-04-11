@@ -45,7 +45,7 @@ class DecoderRNN_3(BaseRNN):
             self.embedding = embed_model
 
         if rnn_cell == None:
-            self.rnn = self.rnn_cell(emb_size + NOISE_SIZE, hidden_size, n_layers, \
+            self.rnn = self.rnn_cell(emb_size, hidden_size, n_layers, \
                                      batch_first=True, dropout=dropout_p)
         else:
             self.rnn = rnn_cell
@@ -67,7 +67,10 @@ class DecoderRNN_3(BaseRNN):
         output_size = input_var.size(1)
         embedded = self.embedding(input_var)
         if noise is not False:
-            embedded = torch.cat((embedded, noise.unsqueeze(1)), 2)
+            noise = torch.randn(embedded.size()) + 1
+            if self.use_cuda:
+                noise = noise.cuda()
+            embedded *= noise
 
         embedded = self.input_dropout(embedded)
 
@@ -225,10 +228,6 @@ class DecoderRNN_3(BaseRNN):
             mask_temp = mask_temp.cuda()
 
         for di in range(max_length):
-            if noise is not False:
-                noise = torch.randn((batch_size, NOISE_SIZE))
-                if self.use_cuda:
-                    noise = noise.cuda()
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, noise, function=function)
             #attn_list.append(attn)
