@@ -4,6 +4,7 @@ from collections import defaultdict
 
 import numpy as np
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
+from model.DecoderRNN_3 import NOISE_SIZE
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
 from .diagnosis_multistep import ExprTree, DIFF_THRESHOLD
@@ -16,7 +17,7 @@ import pdb
 
 import wandb
 
-DEBUG = True
+DEBUG = False
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -148,7 +149,8 @@ class BackTrainer(object):
                       fix_rng=self.fix_rng,
                       use_rule_old=False,
                       target_lengths=target_lengths,
-                      mask_const=mask_const)
+                      mask_const=mask_const,
+                      noise=True)
             # cuda
             target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
             if self.cuda_use:
@@ -176,21 +178,23 @@ class BackTrainer(object):
                 ids,
                 self.n_step)
 
-        learn_queue_fixes = []
-        learn_queue_idx = []
+        learn_queue = []
         for i, new_fix in enumerate(fix_list):
             total_fix_buffer = self.fix_buffer[ids[i]]
             if len(new_fix) > 0:
                 if new_fix not in total_fix_buffer:
                     total_fix_buffer.append(new_fix)
             for fix in total_fix_buffer:
-                learn_queue_idx.append(i)
-                learn_queue_fixes.append(fix)
+                learn_queue.append((i, fix))
 
         # UPDATE
+        random.shuffle(learn_queue)
+        learn_queue_idx, learn_queue_fixes = map(list, zip(*learn_queue)) #unzip
+
         mapo_batch_size = 64
         mapo_last_batch_size = len(learn_queue_idx) % mapo_batch_size
-        mapo_batch_sizes = [mapo_batch_size]*(len(learn_queue_idx)//mapo_batch_size) + ([] if mapo_last_batch_size==0 else [mapo_last_batch_size])
+        mapo_batch_sizes = [mapo_batch_size]*(len(learn_queue_idx)//mapo_batch_size) \
+                           + ([] if mapo_last_batch_size==0 else [mapo_last_batch_size])
         pos = 0
         total_avg_loss = 0
         for mapo_batch_size in mapo_batch_sizes:
@@ -214,7 +218,8 @@ class BackTrainer(object):
                       fix_rng=self.fix_rng,
                       use_rule_old=False,
                       target_lengths=target_lengths[learn_queue_idx_batch],
-                      mask_const=mask_const)
+                      mask_const=mask_const,
+                      noise=False)
 
             self.loss.reset()
             for step, step_output in enumerate(mapo_decoder_outputs):

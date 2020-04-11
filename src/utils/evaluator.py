@@ -205,7 +205,8 @@ class Evaluator(object):
                                         fix_rng=fix_rng,
                                         use_rule_old=use_rule_old,
                                         target_lengths=target_lengths,
-                                        mask_const=False)
+                                        mask_const=False,
+                                        noise=False)
 
 
             seqlist = symbols_list

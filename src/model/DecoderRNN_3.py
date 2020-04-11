@@ -13,6 +13,9 @@ import torch.nn.functional as F
 from .baseRNN import BaseRNN
 from .attention_1 import Attention_1
 
+NOISE_SIZE = 16
+
+
 def isin(ar1, ar2):
     return (ar1[..., None] == ar2).any(-1)
 
@@ -42,8 +45,8 @@ class DecoderRNN_3(BaseRNN):
             self.embedding = embed_model
 
         if rnn_cell == None:
-            self.rnn = self.rnn_cell(emb_size, hidden_size, n_layers, \
-                                 batch_first=True, dropout=dropout_p)
+            self.rnn = self.rnn_cell(emb_size + NOISE_SIZE, hidden_size, n_layers, \
+                                     batch_first=True, dropout=dropout_p)
         else:
             self.rnn = rnn_cell
 
@@ -53,7 +56,7 @@ class DecoderRNN_3(BaseRNN):
     #def _init_state(self, encoder_hidden, op_type):
 
 
-    def forward_step(self, input_var, hidden, encoder_outputs, function):
+    def forward_step(self, input_var, hidden, encoder_outputs, noise, function):
         '''
         normal forward, step by step or all steps together
         '''
@@ -63,6 +66,8 @@ class DecoderRNN_3(BaseRNN):
         batch_size = input_var.size(0)
         output_size = input_var.size(1)
         embedded = self.embedding(input_var)
+        if noise is not False:
+            embedded = torch.cat((embedded, noise.unsqueeze(1)), 2)
 
         embedded = self.input_dropout(embedded)
 
@@ -87,51 +92,51 @@ class DecoderRNN_3(BaseRNN):
         symbols = self.rule_filter(sequence_symbols_list, step_output)
         return symbols
 
-    def forward_normal_teacher_1(self, decoder_inputs, decoder_init_hidden, function):
-        '''
-        decoder_input: batch x seq_lengths x indices( sub last(-1), add first(sos_id))
-        decoder_init_hidden: processed considering encoder layers, bi 
-            lstm : h_0 (num_layers * num_directions, batch, hidden_size)
-                   c_0 (num_layers * num_directions, batch, hidden_size)
-            gru  : 
-        decoder_outputs: batch x seq_lengths x classes,  probility_log
-            lstm : h_n (num_layers * num_directions, batch, hidden_size)
-                   c_n (num_layers * num_directions, batch, hidden_size)
-            gru  :
-        decoder_hidden: layers x batch x hidden_size 
-        '''
-        decoder_outputs, decoder_hidden = self.forward_step(\
-                          decoder_inputs, decoder_init_hidden, function=function)
-        decoder_outputs_list = []
-        sequence_symbols_list = []
-        for di in range(decoder_outputs.size(1)):
-            step_output = decoder_outputs[:, di, :]
-            symbols = self.decode(di, step_output)
-            decoder_outputs_list.append(step_output)
-            sequence_symbols_list.append(symbols)
-        return decoder_outputs_list, decoder_hidden, sequence_symbols_list
-
-    def forward_normal_teacher(self, decoder_inputs, decoder_init_hidden, encoder_outputs, function):
-        decoder_outputs_list = []
-        sequence_symbols_list = []
-        #attn_list = []
-        decoder_hidden = decoder_init_hidden
-        seq_len = decoder_inputs.size(1)
-        for di in range(seq_len):
-            decoder_input = decoder_inputs[:, di]
-            #deocder_input = torch.unsqueeze(decoder_input, 1)
-            #print '1', deocder_input.size()
-            decoder_output, decoder_hidden = self.forward_step(\
-                decoder_input, decoder_hidden, encoder_outputs, function=function)
-            #attn_list.append(attn)
-            step_output = decoder_output.squeeze(1)
-            if self.use_rule_old == False:
-                symbols = self.decode(di, step_output)
-            else:
-                symbols = self.decode_rule(di, sequence_symbols_list, step_output)
-            decoder_outputs_list.append(step_output)
-            sequence_symbols_list.append(symbols)
-        return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
+    # def forward_normal_teacher_1(self, decoder_inputs, decoder_init_hidden, function):
+    #     '''
+    #     decoder_input: batch x seq_lengths x indices( sub last(-1), add first(sos_id))
+    #     decoder_init_hidden: processed considering encoder layers, bi
+    #         lstm : h_0 (num_layers * num_directions, batch, hidden_size)
+    #                c_0 (num_layers * num_directions, batch, hidden_size)
+    #         gru  :
+    #     decoder_outputs: batch x seq_lengths x classes,  probility_log
+    #         lstm : h_n (num_layers * num_directions, batch, hidden_size)
+    #                c_n (num_layers * num_directions, batch, hidden_size)
+    #         gru  :
+    #     decoder_hidden: layers x batch x hidden_size
+    #     '''
+    #     decoder_outputs, decoder_hidden = self.forward_step(\
+    #                       decoder_inputs, decoder_init_hidden, function=function)
+    #     decoder_outputs_list = []
+    #     sequence_symbols_list = []
+    #     for di in range(decoder_outputs.size(1)):
+    #         step_output = decoder_outputs[:, di, :]
+    #         symbols = self.decode(di, step_output)
+    #         decoder_outputs_list.append(step_output)
+    #         sequence_symbols_list.append(symbols)
+    #     return decoder_outputs_list, decoder_hidden, sequence_symbols_list
+    #
+    # def forward_normal_teacher(self, decoder_inputs, decoder_init_hidden, encoder_outputs, function):
+    #     decoder_outputs_list = []
+    #     sequence_symbols_list = []
+    #     #attn_list = []
+    #     decoder_hidden = decoder_init_hidden
+    #     seq_len = decoder_inputs.size(1)
+    #     for di in range(seq_len):
+    #         decoder_input = decoder_inputs[:, di]
+    #         #deocder_input = torch.unsqueeze(decoder_input, 1)
+    #         #print '1', deocder_input.size()
+    #         decoder_output, decoder_hidden = self.forward_step(\
+    #             decoder_input, decoder_hidden, encoder_outputs, function=function)
+    #         #attn_list.append(attn)
+    #         step_output = decoder_output.squeeze(1)
+    #         if self.use_rule_old == False:
+    #             symbols = self.decode(di, step_output)
+    #         else:
+    #             symbols = self.decode_rule(di, sequence_symbols_list, step_output)
+    #         decoder_outputs_list.append(step_output)
+    #         sequence_symbols_list.append(symbols)
+    #     return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 
     def symbol_norm(self, symbols):
         symbols = symbols.view(-1).data.cpu().numpy()
@@ -150,7 +155,7 @@ class DecoderRNN_3(BaseRNN):
         return new_symbols
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                 max_length,  function, num_list, fix_rng, target_lengths, mask_const):
+                                                 max_length,  function, num_list, fix_rng, target_lengths, mask_const, noise):
         '''
         decoder_input: batch x 1
         max_length: including END
@@ -220,8 +225,12 @@ class DecoderRNN_3(BaseRNN):
             mask_temp = mask_temp.cuda()
 
         for di in range(max_length):
+            if noise is not False:
+                noise = torch.randn((batch_size, NOISE_SIZE))
+                if self.use_cuda:
+                    noise = noise.cuda()
             decoder_output, decoder_hidden = self.forward_step(\
-                           decoder_input, decoder_hidden, encoder_outputs, function=function)
+                           decoder_input, decoder_hidden, encoder_outputs, noise, function=function)
             #attn_list.append(attn)
             step_output = decoder_output.squeeze(1)
             step_output = torch.exp(step_output) # batch_size * classes_len
@@ -295,7 +304,7 @@ class DecoderRNN_3(BaseRNN):
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, template_flag=True,\
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
                 vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None,
-                fix_rng=False, use_rule_old=False, target_lengths=None, mask_const=False):
+                fix_rng=False, use_rule_old=False, target_lengths=None, mask_const=False, noise=False):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
@@ -340,7 +349,7 @@ class DecoderRNN_3(BaseRNN):
             decoder_input = pad_var#.unsqueeze(1) # batch x 1
             #pdb.set_trace()
             return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                  max_length, function, num_list, fix_rng, target_lengths, mask_const)
+                                                  max_length, function, num_list, fix_rng, target_lengths, mask_const, noise)
 
 
     def rule(self, symbol):
