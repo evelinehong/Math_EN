@@ -219,7 +219,7 @@ class BackTrainer(object):
                       use_rule_old=False,
                       target_lengths=target_lengths[learn_queue_idx_batch],
                       mask_const=mask_const,
-                      noise=False)
+                      noise=True)
 
             self.loss.reset()
             for step, step_output in enumerate(mapo_decoder_outputs):

@@ -206,7 +206,7 @@ class Evaluator(object):
                                         use_rule_old=use_rule_old,
                                         target_lengths=target_lengths,
                                         mask_const=False,
-                                        noise=False)
+                                        noise=True)
 
 
             seqlist = symbols_list

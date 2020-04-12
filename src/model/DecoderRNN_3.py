@@ -230,6 +230,9 @@ class DecoderRNN_3(BaseRNN):
         for di in range(max_length):
             decoder_output, decoder_hidden = self.forward_step(\
                            decoder_input, decoder_hidden, encoder_outputs, noise, function=function)
+            if torch.any(torch.isnan(decoder_output)):
+                print("nananananan")
+                sys.exit(1)
             #attn_list.append(attn)
             step_output = decoder_output.squeeze(1)
             step_output = torch.exp(step_output) # batch_size * classes_len
@@ -269,16 +272,14 @@ class DecoderRNN_3(BaseRNN):
                         print(f"PROBLEM: mask is all zero, di {di}, max_length {max_length}, target_length {target_lengths[i]}, num_list {num_list[i]}, "
                               f"generated_ops {generated_ops[i]}, generated_nums {generated_nums[i]}, gen_temp {gen_temp}")
                         sys.exit(1)
-                
-            mask[mask == 0] = 1e-12
-            mask_training[mask_training == 0] = 1e-12
 
-            if self.use_cuda:
-                mask = mask.cuda()
-            step_output = step_output * mask
-            training_step_output = step_output * mask_training
+            masked_step_output = step_output * mask
+            training_step_output = step_output * mask * mask_training
 
-            step_output = torch.log(step_output)
+            masked_step_output[masked_step_output==0] = 1e-30
+            training_step_output[training_step_output == 0] = 1e-30
+
+            masked_step_output = torch.log(masked_step_output)
             training_step_output = torch.log(training_step_output)
 
             # if self.use_rule_old == False:
@@ -292,7 +293,7 @@ class DecoderRNN_3(BaseRNN):
 
             decoder_input = self.symbol_norm(symbols)
 
-            decoder_outputs_list.append(step_output)
+            decoder_outputs_list.append(masked_step_output)
             sequence_symbols_list.append(symbols)
 
             ended = ended | (preds == self.class_dict['END_token']).bool()
