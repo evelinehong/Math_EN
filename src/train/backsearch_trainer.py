@@ -187,6 +187,16 @@ class BackTrainer(object):
             for fix in total_fix_buffer:
                 learn_queue.append((i, fix))
 
+                # old_temp = [self.class_list[id] for id in pred]
+                # old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
+                # if len(fix) > 0:
+                #     new_ids = fix
+                #     new_temp = [self.class_list[id] for id in new_ids]
+                #     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
+                #
+                #     print(
+                #         f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
+
         # UPDATE
         random.shuffle(learn_queue)
         learn_queue_idx, learn_queue_fixes = map(list, zip(*learn_queue)) #unzip

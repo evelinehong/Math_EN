@@ -66,11 +66,21 @@ class DecoderRNN_3(BaseRNN):
         batch_size = input_var.size(0)
         output_size = input_var.size(1)
         embedded = self.embedding(input_var)
-        if noise is not False:
-            noise = torch.randn(embedded.size()) + 1
-            if self.use_cuda:
-                noise = noise.cuda()
-            embedded *= noise
+        # if noise is not False:
+        #     noise = torch.randn(embedded.size()) * math.sqrt(0.7) + 1
+        #     if self.use_cuda:
+        #         noise = noise.cuda()
+        #     embedded *= noise
+        #     h,c = hidden
+        #     noise = torch.randn(h.size()) * math.sqrt(0.7) + 1
+        #     if self.use_cuda:
+        #         noise = noise.cuda()
+        #     h *= noise
+        #     noise = torch.randn(c.size()) * math.sqrt(0.7) + 1
+        #     if self.use_cuda:
+        #         noise = noise.cuda()
+        #     c *= noise
+        #     hidden = (h,c)
 
         embedded = self.input_dropout(embedded)
 
@@ -281,6 +291,7 @@ class DecoderRNN_3(BaseRNN):
 
             masked_step_output = torch.log(masked_step_output)
             training_step_output = torch.log(training_step_output)
+            step_output = torch.log(step_output)
 
             # if self.use_rule_old == False:
             symbols = self.decode(di, training_step_output)
@@ -293,7 +304,7 @@ class DecoderRNN_3(BaseRNN):
 
             decoder_input = self.symbol_norm(symbols)
 
-            decoder_outputs_list.append(masked_step_output)
+            decoder_outputs_list.append(step_output)
             sequence_symbols_list.append(symbols)
 
             ended = ended | (preds == self.class_dict['END_token']).bool()
