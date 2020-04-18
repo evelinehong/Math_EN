@@ -204,9 +204,12 @@ class DecoderRNN_3(BaseRNN):
         ended = torch.zeros(batch_size, dtype=torch.bool)
         generated_ops = torch.zeros(batch_size, dtype=torch.int)
         generated_nums = torch.zeros(batch_size, dtype=torch.int)
-        max_lengths = target_lengths - 1  # exclude END
-        max_lengths -= (max_lengths % 2 == 0) # force odd
-        max_lengths = torch.tensor(max_lengths)
+        if target_lengths is not None:
+            target_length = target_lengths - 1  # exclude END
+            target_length -= (target_length % 2 == 0) # force odd
+        else:
+            target_length = [max_len_single(x) for x in num_list]
+        target_length = torch.tensor(target_length)
 
         if self.use_cuda:
             ended = ended.cuda()
@@ -216,7 +219,7 @@ class DecoderRNN_3(BaseRNN):
             only_end = only_end.cuda()
             only_digit = only_digit.cuda()
             only_op = only_op.cuda()
-            max_lengths = max_lengths.cuda()
+            target_length = target_length.cuda()
             mask_temp = mask_temp.cuda()
 
         for di in range(max_length):
@@ -237,19 +240,20 @@ class DecoderRNN_3(BaseRNN):
                 if di==0 or di==1:
                     mask[:, filters_op] = 0  # first two elements are numbers
                 mask *= mask_batch(generated_nums - 1 == generated_ops, only_op) # number of ops cannot be greater than number of nums
-                mask *= mask_batch(generated_nums == (max_lengths+1)/2, only_digit) # number of nums cannot be greater than (target_length+1)/2
+                mask *= mask_batch(generated_nums == (target_length+1)/2, only_digit) # number of nums cannot be greater than (target_length+1)/2
 
                 if di == 0:
                     mask[:, self.filter_END()] = 0
 
-                # if generated_nums[i] - 1 !=  generated_ops[i]:
-                #     mask_step[i, self.filter_END()] = 0
-
-                mask *= mask_batch(di < max_lengths, only_end) # fix length, min
-                mask *= mask_batch(di == max_lengths * ~ended, ~only_end) # fix length, max
+                if target_lengths is not None:
+                    mask *= mask_batch(di < target_length, only_end) # fix length, min
+                    mask *= mask_batch(di == target_length * ~ended, ~only_end) # fix length, max
+                else:
+                    mask *= mask_batch(generated_nums - 1 != generated_ops, only_end)
 
                 if mask_const:
                     mask[:, filters_const] = 0  # for the first iterations, do not generate 1 and 3.14
+                    mask *= mask_batch(di < target_length / 2, only_end)  # min length
 
                 mask = mask * mask_temp
 
@@ -257,15 +261,15 @@ class DecoderRNN_3(BaseRNN):
                 for i in range(batch_size):
                     if torch.all(mask[i] == 0):
                         gen_temp = [self.class_list[id] for id in torch.cat(sequence_symbols_list, 1)[i]] if len(sequence_symbols_list)>0 else "[]"
-                        print(f"PROBLEM: mask is all zero, di {di}, max_length {max_length}, target_length {target_lengths[i]}, num_list {num_list[i]}, "
+                        print(f"PROBLEM: mask is all zero, di {di}, max_length {max_length}, num_list {num_list[i]}, "
                               f"generated_ops {generated_ops[i]}, generated_nums {generated_nums[i]}, gen_temp {gen_temp}")
                         sys.exit(1)
-                
-            mask[mask == 0] = 1e-12
 
             if self.use_cuda:
                 mask = mask.cuda()
+
             masked_step_output = step_output * mask
+            masked_step_output[masked_step_output==0] = 1e-30
             masked_step_output = torch.log(masked_step_output)
 
             if self.use_rule_old == False:

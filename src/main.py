@@ -244,7 +244,7 @@ if __name__ == "__main__":
     if args.resume and args.id is None:
         print('resume must provide id')
         sys.exit(1)
-    wandb.init(project="mwp-postfix", id=(args.id if args.resume else None))
+    wandb.init(project="mwp-postfix-final", id=(args.id if args.resume else None))
     wandb.config.fix_rng = args.fix_rng
     wandb.config.use_rule = args.use_rule
     wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio

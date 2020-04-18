@@ -10,7 +10,7 @@ DEBUG = False
 sym2priority = {'+': 0, '-': 0, '*': 1, '/': 1, "^": 1}
 #sym2priority.update({str(x):2 if x.isdigit()})
 
-DIFF_THRESHOLD = 1e-5
+DIFF_THRESHOLD = 1e-7
 NAN_THRESHOLD = 10e7
 thres_nan = lambda x: x if (NAN_THRESHOLD > abs(x) > DIFF_THRESHOLD and not np.iscomplex(x)) else float('nan')
 plus = lambda x,y: thres_nan(x + y)
@@ -106,8 +106,8 @@ class LeafNode:
             sys.exit(1)
 
         # zero out self, if there's some other valid symbol
-        if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
-            all_prob[self.symbol_id] = 0
+        # if all_prob.sum() - all_prob[self.symbol_id] > 1e-5:
+        #     all_prob[self.symbol_id] = 0
 
         all_prob /= all_prob.sum()
         new_symbol = np.random.choice(range(len(self.class_list_expr)), p=all_prob)

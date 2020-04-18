@@ -192,7 +192,7 @@ class Evaluator(object):
                                   model(input_variable = input_variables,
                                         input_lengths = input_lengths,
                                         target_variable = target_variables,
-                                        template_flag = template_flag,
+                                        template_flag = False,
                                         teacher_forcing_ratio = teacher_forcing_ratio,
                                         mode = mode,
                                         use_rule = use_rule,
@@ -204,7 +204,7 @@ class Evaluator(object):
                                         num_list = batch_num_list,
                                         fix_rng=fix_rng,
                                         use_rule_old=use_rule_old,
-                                        target_lengths=target_lengths,
+                                        target_lengths=None,
                                         mask_const=False)
 
 
