@@ -96,13 +96,13 @@ class BackTrainer(object):
                         (output, fix_step) = output
                         fix = [int(x + 2) for x in output[0]]
                         fix_source_str = "fix found"
-                if len(fix) > 0:
-                    self.fix_buffer[item_id].append(fix)
-
-                if len(fix) == 0:
-                    if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
-                        fix = self.fix_buffer[item_id][-1]
-                        fix_source_str = "fix in buffer"
+                # if len(fix) > 0:
+                #     self.fix_buffer[item_id].append(fix)
+                #
+                # if len(fix) == 0:
+                #     if item_id in self.fix_buffer and len(self.fix_buffer[item_id]) >= 1:
+                #         fix = self.fix_buffer[item_id][-1]
+                #         fix_source_str = "fix in buffer"
 
                 if DEBUG:
                     old_temp = [self.class_list[id] for id in pred]
