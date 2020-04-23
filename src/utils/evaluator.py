@@ -146,7 +146,7 @@ class Evaluator(object):
 
 
     def evaluate(self, model, data_loader, data_list, batch_size, \
-                      evaluate_type, use_rule, use_rule_old, mode, post_flag=False, name_save='train', fix_rng=False):
+                      evaluate_type, use_rule, use_rule_old, mode, buffer, post_flag=False, name_save='train', fix_rng=False):
         batch_generator = data_loader.get_batch(data_list, batch_size, True)
         total_num = len(data_list)
 
@@ -255,8 +255,8 @@ class Evaluator(object):
                 #print gen_equ
                 #print 'gen_ans', gen_ans, '--', 'target_ans', target_ans, '---',
                 #pdb.set_trace()
-                pg_total_list.append(dict({'index': batch_index[i], 'gen_equ': gen_equ, \
-                        'pg':batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans}))
+                pg_total_list.append(dict({'index': batch_index[i], 'num_list': batch_num_list[i], 'buffer': buffer[batch_index[i]], 'gen_equ': gen_equ, \
+                                           'pg': batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans}))
                 if 'error' in gen_ans:
                     #print False
                     #print
