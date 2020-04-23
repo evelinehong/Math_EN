@@ -49,7 +49,6 @@ class BackTrainer(object):
         self.fix_rng = fix_rng
         self.use_rule = use_rule
         self.n_step = n_step
-        self.fix_buffer = defaultdict(list)
 
         self.print_every = print_every
 
@@ -117,7 +116,7 @@ class BackTrainer(object):
                     #     print(f"  no fix found, {num_list_single}, step {fix_step}: {' '.join(old_str)} != {gt}")
 
             best_fix_list.append(fix)
-        return best_fix_list
+        return [[int(x) for x in fix_list] for fix_list in best_fix_list]
 
     def _convert_f_e_2_d_sybmbol(self, target_variable):
         new_variable = []
@@ -373,9 +372,10 @@ class BackTrainer(object):
                 max_ans_acc = test_ans_acc
                 checkpoint.save_according_name("./experiment", 'best')
                 print(f"Checkpoint best saved! max acc: {max_ans_acc}")
-                #wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
-                wandb.save(f"./data/pg_seq_norm_False_train.json")
-                wandb.save(f"./data/pg_seq_norm_False_test.json")
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/model.pt")
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/trainer_states.pt")
+            wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_train.json")
+            wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
 
             # print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))

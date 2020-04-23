@@ -9,6 +9,7 @@ import sys
 
 from .loss import NLLLoss
 from .equ_tools import *
+from utils import NLLLoss, Optimizer, Checkpoint
 import pdb
 
 print_flag_ = 0
@@ -259,8 +260,8 @@ class Evaluator(object):
                 #print gen_equ
                 #print 'gen_ans', gen_ans, '--', 'target_ans', target_ans, '---',
                 #pdb.set_trace()
-                pg_total_list.append(dict({'index': batch_index[i], 'gen_equ': gen_equ, \
-                        'pg':batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans}))
+                pg_total_list.append(dict({'index': batch_index[i], 'num_list': batch_num_list[i], 'gen_equ': gen_equ, \
+                                           'pg': batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans}))
                 if 'error' in gen_ans:
                     #print False
                     #print
@@ -307,7 +308,7 @@ class Evaluator(object):
         #with open("./data/id_template.json", 'w') as f:
         #    json.dump(id_template, f)
         #pdb.set_trace()
-        with open("./data/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
+        with open(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
             json.dump(pg_total_list, f)
         if template_flag == True:
             print  ('--------',acc_right, total_num)
