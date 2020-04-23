@@ -145,9 +145,9 @@ class Evaluator(object):
             return ("compute error")
 
 
-    def evaluate(self, model, data_loader, data_list, template_flag, batch_size, \
+    def evaluate(self, model, data_loader, data_list, batch_size, \
                       evaluate_type, use_rule, use_rule_old, mode, post_flag=False, name_save='train', fix_rng=False):
-        batch_generator = data_loader.get_batch(data_list, batch_size, template_flag)
+        batch_generator = data_loader.get_batch(data_list, batch_size, True)
         total_num = len(data_list)
 
         if evaluate_type == 0:
@@ -177,22 +177,18 @@ class Evaluator(object):
             batch_solution = batch_data_dict['batch_solution']
             batch_size = len(batch_index)
 
-            if template_flag == True:
-                target_variables = batch_data_dict['batch_decode_pad_idx']
-                target_lengths = batch_data_dict['batch_decode_len']
+            target_variables = batch_data_dict['batch_decode_pad_idx']
+            target_lengths = batch_data_dict['batch_decode_len']
 
-                target_variables = Variable(torch.LongTensor(target_variables))
-                if self.cuda_use:
-                    target_variables = target_variables.cuda()
-            else:
-                target_variables = None
+            target_variables = Variable(torch.LongTensor(target_variables))
+            if self.cuda_use:
+                target_variables = target_variables.cuda()
 
 
             decoder_outputs, decoder_hidden, symbols_list = \
                                   model(input_variable = input_variables,
                                         input_lengths = input_lengths,
                                         target_variable = target_variables,
-                                        template_flag = template_flag,
                                         teacher_forcing_ratio = teacher_forcing_ratio,
                                         mode = mode,
                                         use_rule = use_rule,
@@ -204,7 +200,7 @@ class Evaluator(object):
                                         num_list = batch_num_list,
                                         fix_rng=fix_rng,
                                         use_rule_old=use_rule_old,
-                                        target_lengths=target_lengths,
+                                        target_lengths=None,
                                         mask_const=False,
                                         noise=False)
 
@@ -237,12 +233,11 @@ class Evaluator(object):
                 if 0:#print_flag_:
                     print ('index',batch_index[i], '--',)
                     print ('text', batch_text[i].encode('utf-8'))
-                if template_flag==True:
-                  target_equ = target_variables[i].cpu().data.numpy()
-                  tmp_equ = []
-                  if print_flag_:
-                      print (target_equ)
-                  for target_idx in target_equ:
+                target_equ = target_variables[i].cpu().data.numpy()
+                tmp_equ = []
+                if print_flag_:
+                    print (target_equ)
+                for target_idx in target_equ:
                     #elem = self.decode_classes_list[target_idx]
                     elem = self.vocab_list[target_idx]
                     if elem =='END_token':
@@ -287,21 +282,20 @@ class Evaluator(object):
                         continue 
                 if 0:#print_flag_:
                     print ()
-                
-            if template_flag == True:
-                target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
-                if self.cuda_use:
-                    target_variables = target_variables.cuda()
-                for i in range(batch_size):
-                    right_flag = 0
-                    for j in range(target_variables.size(1)):
-                        if seq_var[i][j].item() == self.end_in_classes_idx and \
-                             target_variables[i][j].item() == self.end_in_classes_idx:
-                            right_flag = 1
-                            break
-                        if target_variables[i][j].item() != seq_var[i][j].item():
-                            break
-                    count += right_flag
+
+            target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
+            if self.cuda_use:
+                target_variables = target_variables.cuda()
+            for i in range(batch_size):
+                right_flag = 0
+                for j in range(target_variables.size(1)):
+                    if seq_var[i][j].item() == self.end_in_classes_idx and \
+                         target_variables[i][j].item() == self.end_in_classes_idx:
+                        right_flag = 1
+                        break
+                    if target_variables[i][j].item() != seq_var[i][j].item():
+                        break
+                count += right_flag
 
         #with open("./data/id_right_and_error.json", 'w') as f:
         #    json.dump(id_right_and_error, f)
@@ -310,12 +304,8 @@ class Evaluator(object):
         #pdb.set_trace()
         with open("./data/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
             json.dump(pg_total_list, f)
-        if template_flag == True:
-            print  ('--------',acc_right, total_num)
-            return count*1.0/total_num, acc_right*1.0/total_num
-        else:
-            print  ('--------',acc_right, total_num)
-            return 0, acc_right*1.0/total_num
+        print  ('--------',acc_right, total_num)
+        return count*1.0/total_num, acc_right*1.0/total_num
                 
 
     def _init_rl_state(self, encoder_hidden, bi_flag):

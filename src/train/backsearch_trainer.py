@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import numpy as np
 from model import EncoderRNN, DecoderRNN_1, Seq2seq
-from model.DecoderRNN_3 import NOISE_SIZE
+from model.DecoderRNN_3 import NOISE_SIZE, max_len_single, min_len_single
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
 from .diagnosis_multistep import ExprTree, DIFF_THRESHOLD
@@ -71,7 +71,7 @@ class BackTrainer(object):
         for pred, gt, all_prob, item_id, num_list_single in zip(preds, gts, all_probs, ids, num_list):
             end_idx = self.class_dict['END_token']
             fix = []
-            if end_idx in pred.tolist():
+            if end_idx in pred.tolist() and pred.tolist().index(end_idx) > 0:
                 l = pred.tolist().index(end_idx)
                 pred = pred[:l]
                 all_prob = all_prob[:, 2:]
@@ -126,76 +126,83 @@ class BackTrainer(object):
         return Variable(torch.LongTensor(np.array(new_variable)))
 
     def _train_batch(self, input_variables, input_lengths, target_variables, target_lengths, model: Seq2seq, \
-                     template_flag, teacher_forcing_ratio, mode, batch_size, post_flag, num_list, solutions, ids, mask_const):
+                     teacher_forcing_ratio, mode, post_flag, num_list, solutions, ids, mask_const):
 
         # EXPLORE
         with torch.no_grad():
             # decoder_outputs: expr_len (list) * batch_size * classes
             # symbols_list: expr_len (list) * batch_size * 1
-            decoder_outputs, decoder_hidden, symbols_list = \
-                model(input_variable=input_variables,
-                      input_lengths=input_lengths,
-                      target_variable=target_variables,
-                      template_flag=template_flag,
-                      teacher_forcing_ratio=teacher_forcing_ratio,
-                      mode=mode,
-                      use_rule=self.use_rule,
-                      use_cuda=self.cuda_use,
-                      vocab_dict=self.vocab_dict,
-                      vocab_list=self.vocab_list,
-                      class_dict=self.class_dict,
-                      class_list=self.class_list,
-                      num_list=num_list,
-                      fix_rng=self.fix_rng,
-                      use_rule_old=False,
-                      target_lengths=target_lengths,
-                      mask_const=mask_const,
-                      noise=True)
-            # cuda
-            target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
-            if self.cuda_use:
-                target_variables = target_variables.cuda()
+            min_len = min([min_len_single(x) for x in num_list])
+            max_len = max([max_len_single(x) for x in num_list])
+            for length in range(min_len+1, max_len+1, 2):
+                decoder_outputs, decoder_hidden, symbols_list = \
+                    model(input_variable=input_variables,
+                          input_lengths=input_lengths,
+                          target_variable=target_variables,
+                          teacher_forcing_ratio=teacher_forcing_ratio,
+                          mode=mode,
+                          use_rule=self.use_rule,
+                          use_cuda=self.cuda_use,
+                          vocab_dict=self.vocab_dict,
+                          vocab_list=self.vocab_list,
+                          class_dict=self.class_dict,
+                          class_list=self.class_list,
+                          num_list=num_list,
+                          fix_rng=self.fix_rng,
+                          use_rule_old=False,
+                          target_lengths=[length+1]*len(target_lengths),
+                          mask_const=mask_const,
+                          noise=True)
+                # cuda
+                target_variables_converted = self._convert_f_e_2_d_sybmbol(target_variables)
+                if self.cuda_use:
+                    target_variables_converted = target_variables_converted.cuda()
 
-            pad_in_classes_idx = self.decode_classes_dict['PAD_token']
-            batch_size = len(input_lengths)
+                pad_in_classes_idx = self.decode_classes_dict['PAD_token']
+                batch_size = len(input_lengths)
 
-            match = 0
-            total = 0
+                match = 0
+                total = 0
 
-            seq = symbols_list
-            seq_var = torch.cat(seq, 1)
+                seq = symbols_list
+                seq_var = torch.cat(seq, 1)
 
-            probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
-            preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
-            preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
-            res = solutions
+                probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
+                preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
+                #preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
+                res = solutions
 
-            fix_list = self.find_fix(
-                preds.data.cpu().numpy(),
-                res,
-                probs.data.cpu().numpy(),
-                num_list,
-                ids,
-                self.n_step)
+                fix_list = self.find_fix(
+                    preds.data.cpu().numpy(),
+                    res,
+                    probs.data.cpu().numpy(),
+                    num_list,
+                    ids,
+                    self.n_step)
 
-        learn_queue = []
-        for i, new_fix in enumerate(fix_list):
+                learn_queue = []
+                for i, new_fix in enumerate(fix_list):
+                    total_fix_buffer = self.fix_buffer[ids[i]]
+                    if len(new_fix) > 0:
+                        if new_fix not in total_fix_buffer:
+                            total_fix_buffer.append(new_fix)
+
+        for i in range(batch_size):
             total_fix_buffer = self.fix_buffer[ids[i]]
-            if len(new_fix) > 0:
-                if new_fix not in total_fix_buffer:
-                    total_fix_buffer.append(new_fix)
-            for fix in total_fix_buffer:
-                learn_queue.append((i, fix))
+            if len(total_fix_buffer) > 0:
+                print(f"{num_list[i]} => {solutions[i]}")
+                #min_len = min([len(x) for x in total_fix_buffer])
+                for fix in total_fix_buffer:
+                    #if len(fix) > 2 + min_len: # too long
+                    #    continue
 
-                # old_temp = [self.class_list[id] for id in pred]
-                # old_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in old_temp]]
-                # if len(fix) > 0:
-                #     new_ids = fix
-                #     new_temp = [self.class_list[id] for id in new_ids]
-                #     new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list_single) for temp in new_temp]]
-                #
-                #     print(
-                #         f"  {fix_source_str}, {num_list_single}, step {fix_step}: {' '.join(old_str)} => {' '.join(new_str)} = {gt}")
+                    learn_queue.append((i, fix))
+
+                    new_ids = fix
+                    new_temp = [self.class_list[id] for id in new_ids]
+                    new_str = [str(x) for x in [inverse_temp_to_num(temp, num_list[i]) for temp in new_temp]]
+
+                    print(f"  {' '.join(new_str)}")
 
         # UPDATE
         random.shuffle(learn_queue)
@@ -215,10 +222,9 @@ class BackTrainer(object):
                 model(input_variable=input_variables[learn_queue_idx_batch],
                       input_lengths=input_lengths[learn_queue_idx_batch],
                       target_variable=target_variables[learn_queue_idx_batch],
-                      template_flag=template_flag,
                       teacher_forcing_ratio=teacher_forcing_ratio,
                       mode=mode,
-                      use_rule=self.use_rule,
+                      use_rule=False,
                       use_cuda=self.cuda_use,
                       vocab_dict=self.vocab_dict,
                       vocab_list=self.vocab_list,
@@ -227,7 +233,7 @@ class BackTrainer(object):
                       num_list=num_list[learn_queue_idx_batch],
                       fix_rng=self.fix_rng,
                       use_rule_old=False,
-                      target_lengths=target_lengths[learn_queue_idx_batch],
+                      target_lengths=None,
                       mask_const=mask_const,
                       noise=False)
 
@@ -260,7 +266,7 @@ class BackTrainer(object):
         return total_avg_loss/len(mapo_batch_sizes), [0, match, total]
 
     def _train_epoches(self, data_loader, model, batch_size, start_epoch, start_step, n_epoch, \
-                       mode, template_flag, teacher_forcing_ratio, post_flag):
+                       mode, teacher_forcing_ratio, post_flag):
         print_loss_total = 0
 
         train_list = data_loader.math23k_train_list
@@ -318,10 +324,8 @@ class BackTrainer(object):
                                                    target_variables=target_variables,
                                                    target_lengths=target_lengths,
                                                    model=model,
-                                                   template_flag=template_flag,
                                                    teacher_forcing_ratio=teacher_forcing_ratio,
                                                    mode=mode,
-                                                   batch_size=batch_size,
                                                    post_flag=post_flag,
                                                    num_list=num_list,
                                                    solutions=solutions,
@@ -355,7 +359,6 @@ class BackTrainer(object):
                     self.evaluator.evaluate(model=model,
                                             data_loader=data_loader,
                                             data_list=train_list,
-                                            template_flag=template_flag,
                                             batch_size=batch_size,
                                             evaluate_type=0,
                                             use_rule=self.use_rule,
@@ -367,7 +370,6 @@ class BackTrainer(object):
                 #                            self.evaluator.evaluate(model = model,
                 #                                                    data_loader = data_loader,
                 #                                                    data_list = valid_list,
-                #                                                    template_flag = template_flag,
                 #                                                    batch_size = batch_size,
                 #                                                    evaluate_type = 0,
                 #                                                    use_rule = self.use_rule,
@@ -379,7 +381,6 @@ class BackTrainer(object):
                     self.evaluator.evaluate(model=model,
                                             data_loader=data_loader,
                                             data_list=test_list,
-                                            template_flag=template_flag,
                                             batch_size=batch_size,
                                             evaluate_type=0,
                                             use_rule=self.use_rule,
@@ -398,7 +399,8 @@ class BackTrainer(object):
                                         step=step,
                                         train_acc_list=self.train_acc_list,
                                         test_acc_list=self.test_acc_list,
-                                        loss_list=self.loss_list)
+                                        loss_list=self.loss_list,
+                                        buffer=self.fix_buffer)
                 checkpoint.save_according_name("./experiment", "latest")
 
                 if test_ans_acc > max_ans_acc:
@@ -420,7 +422,7 @@ class BackTrainer(object):
                        "test temp accuracy": test_temp_acc,
                        "test ans accuracy": test_ans_acc}, step=step)
 
-    def train(self, model, data_loader, batch_size, n_epoch, template_flag, \
+    def train(self, model, data_loader, batch_size, n_epoch, \
               resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):
         self.evaluator = Evaluator(vocab_dict=self.vocab_dict,
                                    vocab_list=self.vocab_list,
@@ -444,6 +446,7 @@ class BackTrainer(object):
             self.train_acc_list = resume_checkpoint.train_acc_list
             self.test_acc_list = resume_checkpoint.test_acc_list
             self.loss_list = resume_checkpoint.loss_list
+            self.fix_buffer = resume_checkpoint.buffer
         else:
             start_epoch = 1
             start_step = 0
@@ -462,7 +465,6 @@ class BackTrainer(object):
                             start_step=start_step,
                             n_epoch=n_epoch,
                             mode=mode,
-                            template_flag=template_flag,
                             teacher_forcing_ratio=teacher_forcing_ratio,
                             post_flag=post_flag)
 

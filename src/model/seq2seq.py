@@ -16,7 +16,7 @@ class Seq2seq(nn.Module):
         self.encoder.rnn.flatten_parameters()
         self.decoder.rnn.flatten_parameters()
 
-    def forward(self, input_variable, input_lengths=None, target_variable=None, template_flag=True,\
+    def forward(self, input_variable, input_lengths=None, target_variable=None,
                 teacher_forcing_ratio=0, mode=0, use_rule=False, use_cuda=False, \
                 vocab_dict = None, vocab_list = None, class_dict=None, class_list=None, num_list=None,
                 fix_rng=False, use_rule_old=False, target_lengths=None, mask_const=False, noise=False):
@@ -27,7 +27,6 @@ class Seq2seq(nn.Module):
         result = self.decoder(inputs=target_variable,
                               encoder_hidden=encoder_hidden,
                               encoder_outputs=encoder_outputs,
-                              template_flag = template_flag,
                               function=self.decoder_function,
                               teacher_forcing_ratio=teacher_forcing_ratio,
                               use_rule = use_rule,

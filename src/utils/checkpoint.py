@@ -13,14 +13,15 @@ class Checkpoint():
     TRAINER_STATE_NAME = 'trainer_states.pt'
     MODEL_NAME = 'model.pt'
 
-    def __init__(self, model, optimizer, epoch, step, train_acc_list, test_acc_list, loss_list, path=None):
+    def __init__(self, model, optimizer, epoch, step, train_acc_list, test_acc_list, loss_list, buffer, path=None):
         self.model = model
         self.optimizer = optimizer
         self.epoch = epoch
         self.step = step
         self.train_acc_list = train_acc_list
         self.test_acc_list = test_acc_list 
-        self.loss_list = loss_list 
+        self.loss_list = loss_list
+        self.buffer = buffer
         self._path = path
         self.flag = 0
 
@@ -52,7 +53,8 @@ class Checkpoint():
                     'loss_list': self.loss_list,
                     'torch_rng': torch.random.get_rng_state(),
                     'random_rng': random.getstate(),
-                    'np_rng': np.random.get_state()
+                    'np_rng': np.random.get_state(),
+                    'buffer': self.buffer
                    },
                    os.path.join(path, self.TRAINER_STATE_NAME))
         torch.save(self.model, os.path.join(path, self.MODEL_NAME))
@@ -101,7 +103,8 @@ class Checkpoint():
                           train_acc_list = [],
                           test_acc_list = [],
                           loss_list = [],
-                          path=path)
+                          path=path,
+                          buffer=resume_checkpoint['buffer'])
 
     @classmethod
     def get_latest_checkpoint(cls, experiment_path):

@@ -16,8 +16,8 @@ thres_nan = lambda x: x if (NAN_THRESHOLD > abs(x) > DIFF_THRESHOLD and not np.i
 plus = lambda x,y: thres_nan((x + y) if x != 0 and y != 0 else float('nan'))
 minus = lambda x,y: thres_nan((x - y) if y != 0 else float('nan'))
 times = lambda x,y: thres_nan((x * y) if x != 1 and y != 1 else float('nan'))
-divide = lambda x,y: thres_nan((x / y) if y != 0 and y != 1 and x != y else float('nan'))
-exp = lambda x,y: thres_nan((x ** y) if abs(x) < 1000 and abs(y) < 10 and (x-1>1e5) and (y-1>1e5) else float('nan'))
+divide = lambda x,y: thres_nan((x / y) if y != 0 and y != 1 else float('nan'))
+exp = lambda x,y: thres_nan((x ** y) if abs(x) < 1000 and abs(y) < 10 and (abs(x-1)>1e5) and (abs(y-1)>1e5) else float('nan'))
 root = lambda x,y: thres_nan(exp(x, divide(1, y)) if x >= 0 else float('nan'))
 log = lambda x,base: thres_nan(math.log(x, base) if base > 0 and base != 1 and x > 0 and x != 1 else float('nan'))
 symbol2semantic= {'+': plus, '-': minus, '*': times, '/': divide, '^': exp}
@@ -120,6 +120,9 @@ class LeafNode:
         self.symbol_id = self.prev_symbol_id
         self.initialize()
 
+    def str(self):
+        return inverse_temp_to_num(self.symbol, self.num_list_single)
+
 
 class Node:
     def __init__(self, left, right, op):
@@ -148,6 +151,9 @@ class Node:
         self.prob = prob
         self.max_prob = max_prob
         return self._res
+
+    def str(self):
+        return f"({self.left.str()}){self.op}({self.right.str()})"
 
 
 from dataclasses import dataclass, field
