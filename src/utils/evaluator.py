@@ -9,6 +9,7 @@ import sys
 
 from .loss import NLLLoss
 from .equ_tools import *
+from utils import NLLLoss, Optimizer, Checkpoint
 import pdb
 
 print_flag_ = 0
@@ -302,7 +303,7 @@ class Evaluator(object):
         #with open("./data/id_template.json", 'w') as f:
         #    json.dump(id_template, f)
         #pdb.set_trace()
-        with open("./data/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
+        with open(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
             json.dump(pg_total_list, f)
         print  ('--------',acc_right, total_num)
         return count*1.0/total_num, acc_right*1.0/total_num

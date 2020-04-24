@@ -7,6 +7,10 @@ import torch
 import random
 import numpy as np
 
+def convert(o):
+    if isinstance(o, np.int64): return int(o)
+    raise TypeError
+
 class Checkpoint():
 
     CHECKPOINT_DIR_NAME = 'checkpoints'
@@ -43,7 +47,8 @@ class Checkpoint():
                 f.write('\n\n')
         '''
         if os.path.exists(path):
-            shutil.rmtree(path)
+            os.remove(os.path.join(path, self.TRAINER_STATE_NAME))
+            os.remove(os.path.join(path, self.MODEL_NAME))
         os.makedirs(path)
         torch.save({'epoch': self.epoch,
                     'step': self.step,
