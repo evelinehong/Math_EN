@@ -47,8 +47,10 @@ class Checkpoint():
                 f.write('\n\n')
         '''
         if os.path.exists(path):
-            os.remove(os.path.join(path, self.TRAINER_STATE_NAME))
-            os.remove(os.path.join(path, self.MODEL_NAME))
+            if os.path.exists(os.path.join(path, self.TRAINER_STATE_NAME)):
+                os.remove(os.path.join(path, self.TRAINER_STATE_NAME))
+            if os.path.exists(os.path.join(path, self.MODEL_NAME)):
+                os.remove(os.path.join(path, self.MODEL_NAME))
         else:
             os.makedirs(path)
         torch.save({'epoch': self.epoch,
