@@ -132,60 +132,57 @@ class BackTrainer(object):
         with torch.no_grad():
             # decoder_outputs: expr_len (list) * batch_size * classes
             # symbols_list: expr_len (list) * batch_size * 1
-            min_len = min([min_len_single(x) for x in num_list])
-            max_len = max([max_len_single(x) for x in num_list])
-            for length in range(min_len+1, max_len+1, 2):
-                decoder_outputs, decoder_hidden, symbols_list = \
-                    model(input_variable=input_variables,
-                          input_lengths=input_lengths,
-                          target_variable=target_variables,
-                          teacher_forcing_ratio=teacher_forcing_ratio,
-                          mode=mode,
-                          use_rule=self.use_rule,
-                          use_cuda=self.cuda_use,
-                          vocab_dict=self.vocab_dict,
-                          vocab_list=self.vocab_list,
-                          class_dict=self.class_dict,
-                          class_list=self.class_list,
-                          num_list=num_list,
-                          fix_rng=self.fix_rng,
-                          use_rule_old=False,
-                          target_lengths=[length+1]*len(target_lengths),
-                          mask_const=mask_const,
-                          noise=True)
-                # cuda
-                target_variables_converted = self._convert_f_e_2_d_sybmbol(target_variables)
-                if self.cuda_use:
-                    target_variables_converted = target_variables_converted.cuda()
+            decoder_outputs, decoder_hidden, symbols_list = \
+                model(input_variable=input_variables,
+                      input_lengths=input_lengths,
+                      target_variable=target_variables,
+                      teacher_forcing_ratio=teacher_forcing_ratio,
+                      mode=mode,
+                      use_rule=self.use_rule,
+                      use_cuda=self.cuda_use,
+                      vocab_dict=self.vocab_dict,
+                      vocab_list=self.vocab_list,
+                      class_dict=self.class_dict,
+                      class_list=self.class_list,
+                      num_list=num_list,
+                      fix_rng=self.fix_rng,
+                      use_rule_old=False,
+                      target_lengths=target_lengths,
+                      mask_const=mask_const,
+                      noise=True)
+            # cuda
+            target_variables_converted = self._convert_f_e_2_d_sybmbol(target_variables)
+            if self.cuda_use:
+                target_variables_converted = target_variables_converted.cuda()
 
-                pad_in_classes_idx = self.decode_classes_dict['PAD_token']
-                batch_size = len(input_lengths)
+            pad_in_classes_idx = self.decode_classes_dict['PAD_token']
+            batch_size = len(input_lengths)
 
-                match = 0
-                total = 0
+            match = 0
+            total = 0
 
-                seq = symbols_list
-                seq_var = torch.cat(seq, 1)
+            seq = symbols_list
+            seq_var = torch.cat(seq, 1)
 
-                probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
-                preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
-                #preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
-                res = solutions
+            probs = torch.stack(decoder_outputs, dim=1)  # batch_size * expr_len * classes
+            preds = torch.stack(symbols_list, dim=1).squeeze(2)  # batch_size * expr_len
+            #preds_print = [[self.class_list[j] for j in preds[i]] for i in range(batch_size)]
+            res = solutions
 
-                fix_list = self.find_fix(
-                    preds.data.cpu().numpy(),
-                    res,
-                    probs.data.cpu().numpy(),
-                    num_list,
-                    ids,
-                    self.n_step)
+            fix_list = self.find_fix(
+                preds.data.cpu().numpy(),
+                res,
+                probs.data.cpu().numpy(),
+                num_list,
+                ids,
+                self.n_step)
 
-                learn_queue = []
-                for i, new_fix in enumerate(fix_list):
-                    total_fix_buffer = self.fix_buffer[ids[i]]
-                    if len(new_fix) > 0:
-                        if new_fix not in total_fix_buffer:
-                            total_fix_buffer.append(new_fix)
+            learn_queue = []
+            for i, new_fix in enumerate(fix_list):
+                total_fix_buffer = self.fix_buffer[ids[i]]
+                if len(new_fix) > 0:
+                    if new_fix not in total_fix_buffer:
+                        total_fix_buffer.append(new_fix)
 
         for i in range(batch_size):
             total_fix_buffer = self.fix_buffer[ids[i]]
@@ -233,7 +230,7 @@ class BackTrainer(object):
                       num_list=num_list[learn_queue_idx_batch],
                       fix_rng=self.fix_rng,
                       use_rule_old=False,
-                      target_lengths=None,
+                      target_lengths=target_lengths,
                       mask_const=mask_const,
                       noise=False)
 
