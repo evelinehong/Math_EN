@@ -230,7 +230,7 @@ class BackTrainer(object):
                       num_list=num_list[learn_queue_idx_batch],
                       fix_rng=self.fix_rng,
                       use_rule_old=False,
-                      target_lengths=target_lengths,
+                      target_lengths=target_lengths[learn_queue_idx_batch],
                       mask_const=mask_const,
                       noise=False)
 
