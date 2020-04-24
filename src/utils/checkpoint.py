@@ -49,7 +49,8 @@ class Checkpoint():
         if os.path.exists(path):
             os.remove(os.path.join(path, self.TRAINER_STATE_NAME))
             os.remove(os.path.join(path, self.MODEL_NAME))
-        os.makedirs(path)
+        else:
+            os.makedirs(path)
         torch.save({'epoch': self.epoch,
                     'step': self.step,
                     'optimizer': self.optimizer,
