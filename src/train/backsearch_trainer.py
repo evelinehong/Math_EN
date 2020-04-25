@@ -409,8 +409,9 @@ class BackTrainer(object):
                 checkpoint.save_according_name("./experiment", "latest")
 
                 if test_ans_acc > max_test_acc:
+                    max_test_acc = test_ans_acc
                     checkpoint.save_according_name("./experiment", 'best')
-                    print(f"Checkpoint best saved! max acc: {test_ans_acc}")
+                    print(f"Checkpoint best saved! max acc: {max_test_acc}")
                     if WANDB:
                         wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/model.pt")
                         wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/trainer_states.pt")
