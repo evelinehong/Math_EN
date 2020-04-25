@@ -389,7 +389,10 @@ class BackTrainer(object):
                                             name_save="test",
                                             fix_rng=self.fix_rng)
 
-                max_test_acc = max([test_acc for _, _, test_acc in self.test_acc_list])
+                if len(self.test_acc_list) > 0:
+                    max_test_acc = max([test_acc for _, _, test_acc in self.test_acc_list])
+                else:
+                    max_test_acc = 0
 
                 self.train_acc_list.append((epoch, step, train_ans_acc))
                 self.test_acc_list.append((epoch, step, test_ans_acc))
