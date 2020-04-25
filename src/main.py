@@ -10,12 +10,14 @@ import torch.nn as nn
 import numpy as np
 import random
 
+from train.backsearch_trainer import WANDB
 from utils import DataLoader
 from train import SupervisedTrainer, BackTrainer
 from model import EncoderRNN, DecoderRNN_1, DecoderRNN_2, DecoderRNN_3, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
-import wandb
+if WANDB:
+    import wandb
 
 args = get_args()
 
@@ -66,7 +68,8 @@ def backsearch():
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
 
-    wandb.watch(seq2seq, log=None)
+    if WANDB:
+        wandb.watch(seq2seq)
 
     weight = torch.ones(data_loader.classes_len)
     pad = data_loader.decode_classes_dict['PAD_token']
@@ -144,7 +147,8 @@ def step_one():
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
 
-    wandb.watch(seq2seq, log=None)
+    if WANDB:
+        wandb.watch(seq2seq)
 
     weight = torch.ones(data_loader.classes_len)
     pad = data_loader.decode_classes_dict['PAD_token']
@@ -244,13 +248,15 @@ if __name__ == "__main__":
     if args.resume and args.id is None:
         print('resume must provide id')
         sys.exit(1)
-    wandb.init(project="mwp-postfix-final", id=(args.id if args.resume else None))
-    wandb.config.fix_rng = args.fix_rng
-    wandb.config.use_rule = args.use_rule
-    wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
-    wandb.config.run_flag = args.run_flag
-    wandb.config.n_step = args.n_step
-    wandb.config.seed = args.seed
+
+    if WANDB:
+        wandb.init(project="mwp-postfix-final", id=(args.id if args.resume else None))
+        wandb.config.fix_rng = args.fix_rng
+        wandb.config.use_rule = args.use_rule
+        wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
+        wandb.config.run_flag = args.run_flag
+        wandb.config.n_step = args.n_step
+        wandb.config.seed = args.seed
 
     random.seed(args.seed)
     np.random.seed(args.seed)

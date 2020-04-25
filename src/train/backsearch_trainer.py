@@ -14,7 +14,9 @@ from torch.autograd import Variable
 import torch.nn as nn
 import pdb
 
-import wandb
+WANDB = False
+if WANDB:
+    import wandb
 
 DEBUG = False
 
@@ -243,8 +245,6 @@ class BackTrainer(object):
 
         threshold = [0] + [1] * 9
 
-        max_ans_acc = 0
-
         for epoch in range(start_epoch, n_epoch + 1):
             epoch_loss_total = 0
 
@@ -314,8 +314,8 @@ class BackTrainer(object):
                         self.loss.name,
                         print_loss_avg,
                         teacher_forcing_ratio))
-
-                    wandb.log({"epoch": epoch, "avg loss": print_loss_avg}, step=step)
+                    if WANDB:
+                        wandb.log({"epoch": epoch, "avg loss": print_loss_avg}, step=step)
 
             model.eval()
             train_temp_acc, train_ans_acc = \
@@ -368,25 +368,28 @@ class BackTrainer(object):
                                     loss_list=self.loss_list)
             checkpoint.save_according_name("./experiment", "latest")
 
-            if test_ans_acc > max_ans_acc:
-                max_ans_acc = test_ans_acc
+            max_test_acc =  max([test_acc for _,_,test_acc in self.test_acc_list])
+            if test_ans_acc > max_test_acc:
                 checkpoint.save_according_name("./experiment", 'best')
-                print(f"Checkpoint best saved! max acc: {max_ans_acc}")
-                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/model.pt")
-                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/trainer_states.pt")
-            wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_train.json")
-            wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
+                print(f"Checkpoint best saved! max acc: {test_ans_acc}")
+                if WANDB:
+                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/model.pt")
+                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/trainer_states.pt")
+            if WANDB:
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_train.json")
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
 
             # print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
             print("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f, max_test_acc: %.2f" \
-                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_ans_acc))
+                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_test_acc))
 
-            wandb.log({"epoch": epoch,
-                       "train temp accuracy": train_temp_acc,
-                       "train ans accuracy": train_ans_acc,
-                       "test temp accuracy": test_temp_acc,
-                       "test ans accuracy": test_ans_acc}, step=step)
+            if WANDB:
+                wandb.log({"epoch": epoch,
+                           "train temp accuracy": train_temp_acc,
+                           "train ans accuracy": train_ans_acc,
+                           "test temp accuracy": test_temp_acc,
+                           "test ans accuracy": test_ans_acc}, step=step)
 
     def train(self, model, data_loader, batch_size, n_epoch, template_flag, \
               resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):

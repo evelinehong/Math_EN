@@ -24,7 +24,7 @@ class Checkpoint():
         self.step = step
         self.train_acc_list = train_acc_list
         self.test_acc_list = test_acc_list 
-        self.loss_list = loss_list 
+        self.loss_list = loss_list
         self._path = path
         self.flag = 0
 
@@ -106,9 +106,9 @@ class Checkpoint():
                           optimizer=optimizer,
                           epoch=resume_checkpoint['epoch'],
                           step=resume_checkpoint['step'],
-                          train_acc_list = [],
-                          test_acc_list = [],
-                          loss_list = [],
+                          train_acc_list = resume_checkpoint['train_acc_list'],
+                          test_acc_list = resume_checkpoint['test_acc_list'],
+                          loss_list = resume_checkpoint['loss_list'],
                           path=path)
 
     @classmethod
