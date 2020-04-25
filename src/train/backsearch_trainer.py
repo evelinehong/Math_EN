@@ -388,6 +388,9 @@ class BackTrainer(object):
                                             use_rule_old=False,
                                             name_save="test",
                                             fix_rng=self.fix_rng)
+
+                max_test_acc = max([test_acc for _, _, test_acc in self.test_acc_list])
+
                 self.train_acc_list.append((epoch, step, train_ans_acc))
                 self.test_acc_list.append((epoch, step, test_ans_acc))
                 self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
@@ -402,7 +405,6 @@ class BackTrainer(object):
                                         buffer=self.fix_buffer)
                 checkpoint.save_according_name("./experiment", "latest")
 
-                max_test_acc =  max([test_acc for _,_,test_acc in self.test_acc_list])
                 if test_ans_acc > max_test_acc:
                     checkpoint.save_according_name("./experiment", 'best')
                     print(f"Checkpoint best saved! max acc: {test_ans_acc}")
