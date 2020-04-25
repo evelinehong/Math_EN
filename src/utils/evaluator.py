@@ -308,6 +308,8 @@ class Evaluator(object):
         #with open("./data/id_template.json", 'w') as f:
         #    json.dump(id_template, f)
         #pdb.set_trace()
+        if not os.path.exists(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/"):
+            os.makedirs(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/")
         with open(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
             json.dump(pg_total_list, f)
         if template_flag == True:
