@@ -147,7 +147,7 @@ class Evaluator(object):
 
 
     def evaluate(self, model, data_loader, data_list, batch_size, \
-                      evaluate_type, use_rule, use_rule_old, mode, buffer, post_flag=False, name_save='train', fix_rng=False):
+                      evaluate_type, use_rule, use_rule_old, mode, buffer, post_flag=False, name_save='train', fix_rng=False,beam_size=1):
         batch_generator = data_loader.get_batch(data_list, batch_size, True)
         total_num = len(data_list)
 
@@ -185,25 +185,26 @@ class Evaluator(object):
             if self.cuda_use:
                 target_variables = target_variables.cuda()
 
-
-            decoder_outputs, decoder_hidden, symbols_list = \
-                                  model(input_variable = input_variables,
-                                        input_lengths = input_lengths,
-                                        target_variable = target_variables,
-                                        teacher_forcing_ratio = teacher_forcing_ratio,
-                                        mode = mode,
-                                        use_rule = use_rule,
-                                        use_cuda = self.cuda_use,
-                                        vocab_dict = self.vocab_dict,
-                                        vocab_list = self.vocab_list,
-                                        class_dict = self.decode_classes_dict,
-                                        class_list = self.decode_classes_list,
-                                        num_list = batch_num_list,
-                                        fix_rng=fix_rng,
-                                        use_rule_old=use_rule_old,
-                                        target_lengths=None,
-                                        mask_const=False,
-                                        noise=False)
+            with torch.no_grad():
+                decoder_outputs, decoder_hidden, symbols_list = \
+                                      model(input_variable = input_variables,
+                                            input_lengths = input_lengths,
+                                            target_variable = target_variables,
+                                            teacher_forcing_ratio = teacher_forcing_ratio,
+                                            mode = mode,
+                                            use_rule = use_rule,
+                                            use_cuda = self.cuda_use,
+                                            vocab_dict = self.vocab_dict,
+                                            vocab_list = self.vocab_list,
+                                            class_dict = self.decode_classes_dict,
+                                            class_list = self.decode_classes_list,
+                                            num_list = batch_num_list,
+                                            fix_rng=fix_rng,
+                                            use_rule_old=use_rule_old,
+                                            target_lengths=None,
+                                            mask_const=False,
+                                            noise=False,
+                                            beam_size=beam_size)
 
 
             seqlist = symbols_list
@@ -256,7 +257,7 @@ class Evaluator(object):
                 #print gen_equ
                 #print 'gen_ans', gen_ans, '--', 'target_ans', target_ans, '---',
                 #pdb.set_trace()
-                pg_total_list.append(dict({'index': batch_index[i], 'num_list': batch_num_list[i], 'buffer': buffer[batch_index[i]], 'gen_equ': gen_equ, \
+                pg_total_list.append(dict({'index': batch_index[i], 'num_list': batch_num_list[i], 'gen_equ': gen_equ, \
                                            'pg': batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans}))
                 if 'error' in gen_ans:
                     #print False

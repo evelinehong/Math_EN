@@ -203,14 +203,15 @@ def step_one_test():
         test_temp_acc, test_ans_acc = evaluator.evaluate(model = seq2seq,
                                                      data_loader = data_loader,
                                                      data_list = data_loader.math23k_test_list,
-                                                     template_flag = True,
                                                      batch_size = 64,
                                                      evaluate_type = 0,
-                                                     use_rule = args.use_rule,
+                                                     use_rule = False,
                                                      mode = args.mode,
                                                      post_flag=args.post_flag,
                                                      name_save = name,
-                                                     use_rule_old=False)
+                                                     use_rule_old=False,
+                                                     buffer=[],
+                                                     beam_size=args.beam_size)
     print (test_temp_acc, test_ans_acc)
 
 def step_three():

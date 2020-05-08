@@ -33,5 +33,7 @@ def get_args():
     parser.add_argument('--seed', default=123, type=int, help="numpy/torch seed")
     parser.add_argument('--id', type=str, dest='id', default=None)
 
+    parser.add_argument('--beams', type=int, dest='beam_size', default=1)
+
     args = parser.parse_args()
     return args

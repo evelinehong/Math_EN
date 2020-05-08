@@ -104,6 +104,10 @@ class Checkpoint():
         torch.random.set_rng_state(resume_checkpoint['torch_rng'])
         random.setstate(resume_checkpoint['random_rng'])
         np.random.set_state(resume_checkpoint['np_rng'])
+        if 'buffer' in resume_checkpoint:
+            buffer = resume_checkpoint['buffer']
+        else:
+            buffer = []
         return Checkpoint(model=model,
                           optimizer=optimizer,
                           epoch=resume_checkpoint['epoch'],
@@ -112,7 +116,7 @@ class Checkpoint():
                           test_acc_list = resume_checkpoint['test_acc_list'],
                           loss_list = resume_checkpoint['loss_list'],
                           path=path,
-                          buffer=resume_checkpoint['buffer'])
+                          buffer=buffer)
 
     @classmethod
     def get_latest_checkpoint(cls, experiment_path):

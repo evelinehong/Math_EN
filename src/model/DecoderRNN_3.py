@@ -29,6 +29,13 @@ def mask_batch(batch_select, class_select):
     return ~(batch_select[:, None] * class_select[None, :])
 
 
+class Beam:  # the class save the beam node
+    def __init__(self, score, input_var, hidden, all_output):
+        self.score = score
+        self.input_var = input_var
+        self.hidden = hidden
+        self.all_output = all_output
+
 class DecoderRNN_3(BaseRNN):
     def __init__(self, vocab_size, class_size, embed_model=None, emb_size=100, hidden_size=128, \
                  n_layers=1, rnn_cell = None, rnn_cell_name='lstm', \
@@ -168,6 +175,206 @@ class DecoderRNN_3(BaseRNN):
         if self.use_cuda:
             new_symbols = new_symbols.cuda()
         return new_symbols
+
+    def forward_normal_no_teacher_beam(self, decoder_input, decoder_init_hidden, encoder_outputs,\
+                                                 function, num_list, fix_rng, target_length, mask_const, noise, beam_size=5):
+        '''
+        decoder_input: batch x 1
+        max_length: including END
+
+        decoder_output: batch x 1 x classes,  probility_log
+        '''
+
+        #attn_list = []
+        decoder_hidden = decoder_init_hidden
+
+        batch_size = decoder_input.size(0)
+        classes_len = len(self.class_list)
+        filters_op = self.filter_op()
+        only_op = torch.zeros(classes_len, dtype=torch.bool)
+        only_op[filters_op] = 1
+
+        filters_digit = []
+        for k,v in self.class_dict.items():
+            if 'temp' in k or 'PI' == k or k.isdigit():
+                filters_digit.append(v)
+        filters_digit = np.array(filters_digit)
+        only_digit = torch.zeros(classes_len, dtype=torch.bool)
+        only_digit[filters_digit] = 1
+
+        filters_const = []
+        for k, v in self.class_dict.items():
+            if 'PI' == k or k.isdigit():
+                filters_const.append(v)
+        filters_const = np.array(filters_const)
+
+        mask_temp = torch.ones((batch_size, classes_len), dtype=torch.bool)
+        if num_list is not None:
+            for i in range (len(num_list)):
+                filters_temp = []
+
+                for k,v in self.class_dict.items():
+                    if 'temp' in k:
+                        if (ord(k[5]) - ord('a') >= len(num_list[i])):
+                            filters_temp.append(v)
+                filters_temp = np.array (filters_temp)
+                mask_temp[i, filters_temp] = 0
+
+        only_pad = torch.zeros(classes_len, dtype=torch.bool)
+        only_pad[self.filter_PAD()] = 1
+
+        only_end = torch.zeros(classes_len, dtype=torch.bool)
+        only_end[self.filter_END()] = 1
+
+        ended = torch.zeros(batch_size, dtype=torch.bool)
+        generated_ops = torch.zeros(batch_size, dtype=torch.int)
+        generated_nums = torch.zeros(batch_size, dtype=torch.int)
+        max_len = [max_len_single(x) for x in num_list]
+        max_len = torch.tensor(max_len)
+        if target_length is not None:
+            target_length = np.array(target_length)
+            target_length = target_length - 1  # exclude END
+            target_length -= (target_length % 2 == 0) # force odd
+            target_length[target_length > max_len.numpy()] = 0
+            target_length = torch.tensor(target_length)
+            max_len = target_length
+
+
+        if self.use_cuda:
+            ended = ended.cuda()
+            generated_ops = generated_ops.cuda()
+            generated_nums = generated_nums.cuda()
+            only_pad = only_pad.cuda()
+            only_end = only_end.cuda()
+            only_digit = only_digit.cuda()
+            only_op = only_op.cuda()
+            max_len = max_len.cuda()
+            if target_length is not None:
+                target_length = target_length.cuda()
+            mask_temp = mask_temp.cuda()
+
+        max_target_length = max(max_len) + 1
+        all_decoder_outputs = torch.zeros(max_target_length, batch_size, classes_len)
+        beam_list = list()
+        score = torch.zeros(batch_size)
+        if self.use_cuda:
+            score = score.cuda()
+        beam_list.append(Beam(score, decoder_input, decoder_hidden, all_decoder_outputs))
+
+        for di in range(max_target_length):
+            beam_len = len(beam_list)
+            beam_scores = torch.zeros(batch_size, classes_len * beam_len)
+            all_hidden = torch.zeros(len(decoder_hidden), decoder_hidden[0].size(0), batch_size*beam_len, decoder_hidden[0].size(2))
+            all_outputs =  torch.zeros(max_target_length, batch_size * beam_len, classes_len)
+            if self.use_cuda:
+                beam_scores = beam_scores.cuda()
+                all_hidden = all_hidden.cuda()
+                all_outputs = all_outputs.cuda()
+
+            for b_idx in range(len(beam_list)):
+                decoder_input = beam_list[b_idx].input_var
+                decoder_hidden = beam_list[b_idx].hidden
+
+                decoder_output, decoder_hidden = self.forward_step(\
+                               decoder_input, decoder_hidden, encoder_outputs, noise, function=function)
+                if torch.any(torch.isnan(decoder_output)):
+                    print("nananananan")
+                    sys.exit(1)
+                #attn_list.append(attn)
+                step_output = decoder_output.squeeze(1)
+                step_output = torch.exp(step_output) # batch_size * classes_len
+
+                mask = torch.ones((batch_size, classes_len))
+                if self.use_cuda:
+                    mask = mask.cuda()
+
+                # if self.use_rule:
+                #     mask *= mask_batch(ended, ~only_pad) # if ended, all except pad are 0
+                #     mask *= mask_batch(~ended, only_pad) # if not ended, only pad is 0
+                #
+                #     if di==0 or di==1:
+                #         mask[:, filters_op] = 0  # first two elements are numbers
+                #     mask *= mask_batch(generated_nums - 1 == generated_ops, only_op) # number of ops cannot be greater than number of nums
+                #
+                #     mask *= mask_batch((max_len == 0) & (di==0), ~only_end) # if max len is 0, immediately generate END
+                #     mask *= mask_batch((max_len != 0) & (generated_nums - 1 != generated_ops), only_end) # otherwise allow END only when nums match ops
+                #
+                #     if target_length is not None:
+                #         mask *= mask_batch(generated_nums == (target_length + 1) / 2, only_digit)  # number of nums cannot be greater than (target_length+1)/2
+                #         mask *= mask_batch(di < target_length, only_end)  # min length
+                #         mask *= mask_batch(di == target_length, ~only_end)
+                #
+                #     if mask_const:
+                #         mask[:, filters_const] = 0  # for the first iterations, do not generate 1 and 3.14
+                #
+                #     mask = mask * mask_temp
+
+                masked_step_output = step_output * mask
+                masked_step_output[masked_step_output==0] = 1e-30
+
+
+                score = masked_step_output
+
+                masked_step_output = torch.log(masked_step_output)
+
+                beam_score = beam_list[b_idx].score
+                beam_score = beam_score.unsqueeze(1)
+                repeat_dims = [1] * beam_score.dim()
+                repeat_dims[1] = score.size(1)
+                beam_score = beam_score.repeat(*repeat_dims)
+                score += beam_score
+                beam_scores[:, b_idx * classes_len: (b_idx + 1) * classes_len] = score
+                all_hidden[0, :, b_idx * batch_size:(b_idx + 1) * batch_size, :] = decoder_hidden[0]
+                all_hidden[1, :, b_idx * batch_size:(b_idx + 1) * batch_size, :] = decoder_hidden[1]
+
+                beam_list[b_idx].all_output[di] = masked_step_output
+                all_outputs[:, batch_size * b_idx: batch_size * (b_idx + 1), :] = \
+                    beam_list[b_idx].all_output
+
+                # if self.use_rule_old == False:
+                # symbols = self.decode(di, masked_step_output)
+                # else:
+                #     step_output, symbols = self.decode_rule(di, sequence_symbols_list, step_output)
+
+                # preds = symbols.flatten()
+                # generated_nums += isin(preds, torch.tensor(filters_digit).cuda()).int()
+                # generated_ops += isin(preds, torch.tensor(self.filter_op()).cuda()).int()
+
+                # decoder_input = self.symbol_norm(symbols)
+
+                # ended = ended | (preds == self.class_dict['END_token']).bool()
+            topv, topi = beam_scores.topk(beam_size, dim=1)
+            beam_list = list()
+
+            for k in range(beam_size):
+                temp_topk = topi[:, k]
+                temp_input = temp_topk % classes_len
+                temp_input = temp_input.data
+                temp_beam_pos = temp_topk / classes_len
+
+                indices = torch.LongTensor(range(batch_size))
+                if self.use_cuda:
+                    indices = indices.cuda()
+                indices += temp_beam_pos * batch_size
+
+                temp_hidden = all_hidden.index_select(2, indices)
+                temp_output = all_outputs.index_select(1, indices)
+
+                decoder_input = self.symbol_norm(temp_input)
+
+                beam_list.append(Beam(topv[:, k], decoder_input, (temp_hidden[0], temp_hidden[1]), temp_output))
+
+        sequence_symbols_list = []
+        all_decoder_outputs = beam_list[0].all_output
+
+
+        for di in range(max_target_length):
+            symbols = self.decode(di, all_decoder_outputs[di])
+            sequence_symbols_list.append(symbols)
+
+
+        return all_decoder_outputs, beam_list[0].hidden, sequence_symbols_list#, attn_list
+
 
     def forward_normal_no_teacher(self, decoder_input, decoder_init_hidden, encoder_outputs,\
                                                  function, num_list, fix_rng, target_length, mask_const, noise):
@@ -317,11 +524,10 @@ class DecoderRNN_3(BaseRNN):
 
         return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 
-
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, 
                 function=F.log_softmax, teacher_forcing_ratio=0, use_rule=False, use_cuda=False, \
                 vocab_dict = None, vocab_list = None, class_dict = None, class_list = None, num_list = None,
-                fix_rng=False, use_rule_old=False, target_lengths=None, mask_const=False, noise=False):
+                fix_rng=False, use_rule_old=False, target_lengths=None, mask_const=False, noise=False, beam_size=None):
         '''
         使用rule的时候，teacher_forcing_rattio = 0
         '''
@@ -356,12 +562,18 @@ class DecoderRNN_3(BaseRNN):
             decoder_inputs = inputs
             return self.forward_normal_teacher(decoder_inputs, decoder_init_hidden, encoder_outputs,\
                                                              function)
-        else:
+        elif beam_size>1:
             #decoder_input = inputs[:,0].unsqueeze(1) # batch x 1
             decoder_input = pad_var#.unsqueeze(1) # batch x 1
             #pdb.set_trace()
-            return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs,\
-                                                  function, num_list, fix_rng, target_lengths, mask_const, noise)
+            return self.forward_normal_no_teacher_beam(decoder_input, decoder_init_hidden, encoder_outputs,\
+                                                  function, num_list, fix_rng, target_lengths, mask_const, noise, beam_size)
+        else:
+            # decoder_input = inputs[:,0].unsqueeze(1) # batch x 1
+            decoder_input = pad_var  # .unsqueeze(1) # batch x 1
+            # pdb.set_trace()
+            return self.forward_normal_no_teacher(decoder_input, decoder_init_hidden, encoder_outputs, \
+                                                       function, num_list, fix_rng, target_lengths, mask_const, noise)
 
 
     def rule(self, symbol):
