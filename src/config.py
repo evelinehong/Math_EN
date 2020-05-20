@@ -26,7 +26,6 @@ def get_args():
     parser.add_argument('--run-flag', type=str, dest='run_flag',default='train_23k')
     parser.add_argument('--post-flag', action='store_true', dest='post_flag', default=True)
 
-    parser.add_argument('--fix-rng', action='store_true', dest='fix_rng', default=True)
     parser.add_argument('--use-rule', action='store_true', dest='use_rule', default=True)
     parser.add_argument('--nstep', type=int, dest='n_step', default=1)
 

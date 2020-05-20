@@ -192,7 +192,9 @@ class DataLoader():
 
 
     def get_batch(self, data_list, batch_size, template_flag = False, verbose=0):
-        batch_num = int(len(data_list)/batch_size)+1
+        batch_num = int(len(data_list)/batch_size)
+        if len(data_list) % batch_size != 0:
+            batch_num += 1
         for idx in range(batch_num):
             batch_start = idx*batch_size
             batch_end = min((idx+1)*batch_size, len(data_list))

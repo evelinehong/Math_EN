@@ -81,6 +81,8 @@ def post_solver(post_equ):
                 stack.append(str(op_v_2/op_v_1))
             else:
                 stack.append(str(op_v_2**op_v_1))
+    if len(stack) != 1:
+        raise Exception("invalid postfix")
     return stack.pop()
 
 def solve_equation(equ_list):

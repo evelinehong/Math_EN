@@ -1,7 +1,7 @@
 import sys
 import random
 import numpy as np
-from model import EncoderRNN, DecoderRNN_1, Seq2seq
+from model import EncoderRNN, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
 import torch
@@ -27,7 +27,7 @@ def inverse_temp_to_num(elem, num_list_single):
 
 class SupervisedTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
-                  loss, print_every, teacher_schedule, checkpoint_dir_name, fix_rng, use_rule):
+                  loss, print_every, teacher_schedule, checkpoint_dir_name, use_rule):
         self.vocab_dict = vocab_dict
         self.vocab_list = vocab_list
         self.decode_classes_dict = decode_classes_dict
@@ -40,7 +40,6 @@ class SupervisedTrainer(object):
         if self.cuda_use == True:
             self.loss.cuda()
 
-        self.fix_rng = fix_rng
         self.use_rule = use_rule
 
         self.print_every = print_every
@@ -69,7 +68,6 @@ class SupervisedTrainer(object):
                                       model(input_variable = input_variables,
                                       input_lengths = input_lengths,
                                       target_variable = target_variables,
-                                      template_flag = template_flag,
                                       teacher_forcing_ratio = teacher_forcing_ratio,
                                       mode = mode,
                                       use_rule = self.use_rule,
@@ -79,9 +77,8 @@ class SupervisedTrainer(object):
                                       class_dict = self.class_dict,
                                       class_list = self.class_list,
                                       num_list = num_list,
-                                      fix_rng = self.fix_rng,
                                       use_rule_old = False,
-                                      target_lengths = target_lengths,
+                                      target_lengths = None,
                                       mask_const = mask_const)
         # cuda
         target_variables = self._convert_f_e_2_d_sybmbol(target_variables)
@@ -234,14 +231,12 @@ class SupervisedTrainer(object):
                                         self.evaluator.evaluate(model = model,
                                                                 data_loader = data_loader,
                                                                 data_list = train_list,
-                                                                template_flag = True,
                                                                 batch_size = batch_size,
                                                                 evaluate_type = 0,
-                                                                use_rule = self.use_rule,
+                                                                use_rule = False,
                                                                 mode = mode,
                                                                 post_flag=post_flag,
-                                                                use_rule_old=False,
-                                                                fix_rng=self.fix_rng)
+                                                                use_rule_old=False)
             #valid_temp_acc, valid_ans_acc =\
             #                            self.evaluator.evaluate(model = model,
             #                                                    data_loader = data_loader,
@@ -258,15 +253,13 @@ class SupervisedTrainer(object):
                                         self.evaluator.evaluate(model = model,
                                                                 data_loader = data_loader,
                                                                 data_list = test_list,
-                                                                template_flag = True,
                                                                 batch_size = batch_size,
                                                                 evaluate_type = 0,
-                                                                use_rule = self.use_rule,
+                                                                use_rule = False,
                                                                 mode = mode,
                                                                 post_flag=post_flag,
                                                                 use_rule_old=False,
-                                                                name_save="test",
-                                                                fix_rng=self.fix_rng)
+                                                                name_save="test")
             self.train_acc_list.append((epoch, step, train_ans_acc))
             self.test_acc_list.append((epoch, step, test_ans_acc))
             self.loss_list.append((epoch, epoch_loss_total/steps_per_epoch))
@@ -277,7 +270,8 @@ class SupervisedTrainer(object):
                                     step=step,
                                     train_acc_list=self.train_acc_list,
                                     test_acc_list=self.test_acc_list,
-                                    loss_list=self.loss_list)
+                                    loss_list=self.loss_list,
+                                    buffer=[])
             checkpoint.save_according_name("./experiment", "latest")
 
             if test_ans_acc > max_ans_acc:

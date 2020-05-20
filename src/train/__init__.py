@@ -1,2 +1,2 @@
-from .pre_seq2eq_trainer import SupervisedTrainer
+from .seq2seq_trainer import SupervisedTrainer
 from .backsearch_trainer import BackTrainer

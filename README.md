@@ -17,3 +17,19 @@ The training accuracy, and test accuracy will be printed. (you can randomly samp
 ## References
 ----
 - Lei Wang, Yan Wang, Deng Cai, Dongxiang Zhang, Xiaojiang Liu, "Translating a Math Word Problem to an Expression Tree", https://arxiv.org/abs/1811.05632
+
+
+d=[]
+for p in ['run-20200423_030313-da50n6jh', 'run-20200424_185943-da50n6jh', 'run-20200425_064552-da50n6jh', 'run-20200425_173409-da50n6jh']:
+    with open(f'./wandb/{p}/wandb-history.jsonl') as f:
+        content = f.readlines()
+        d = d + json.loads('['+','.join(content)+']')
+testaccs={}
+for dd in d:
+    if "test ans accuracy" in dd:
+        testaccs[dd["epoch"]] = (dd["test ans accuracy"], dd["train ans accuracy"])
+with open("bs50.csv", "w") as f:
+    for epoch,acc in testaccs.items():
+        print(acc)
+        (test_acc, train_acc) = acc
+        f.write(f"{epoch},{test_acc},{train_acc}\n")

@@ -13,7 +13,7 @@ import random
 from train.backsearch_trainer import WANDB
 from utils import DataLoader
 from train import SupervisedTrainer, BackTrainer
-from model import EncoderRNN, DecoderRNN_1, DecoderRNN_2, DecoderRNN_3, Seq2seq
+from model import EncoderRNN, DecoderRNN, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
 if WANDB:
@@ -23,7 +23,7 @@ args = get_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
-def backsearch():
+def train_backsearch():
     if args.mode == 0:
         encoder_cell = 'lstm'
         decoder_cell = 'lstm'
@@ -51,18 +51,18 @@ def backsearch():
                               rnn_cell = None,
                               rnn_cell_name = encoder_cell,
                               variable_lengths = True)
-    decode_model = DecoderRNN_3(vocab_size = data_loader.vocab_len,
-                                class_size = data_loader.classes_len,
-                                embed_model = embed_model,
-                                emb_size = 128,
-                                hidden_size = 1024,
-                                n_layers = 2,
-                                rnn_cell = None,
-                                rnn_cell_name=decoder_cell,
-                                sos_id = data_loader.vocab_dict['END_token'],
-                                eos_id = data_loader.vocab_dict['END_token'],
-                                input_dropout_p = 0.3,
-                                dropout_p = 0.4)
+    decode_model = DecoderRNN(vocab_size = data_loader.vocab_len,
+                              class_size = data_loader.classes_len,
+                              embed_model = embed_model,
+                              emb_size = 128,
+                              hidden_size = 1024,
+                              n_layers = 2,
+                              rnn_cell = None,
+                              rnn_cell_name=decoder_cell,
+                              sos_id = data_loader.vocab_dict['END_token'],
+                              eos_id = data_loader.vocab_dict['END_token'],
+                              input_dropout_p = 0.3,
+                              dropout_p = 0.4)
     seq2seq = Seq2seq(encode_model, decode_model)
 
     if args.cuda_use:
@@ -84,7 +84,6 @@ def backsearch():
                    print_every = 10,
                    teacher_schedule = False,
                    checkpoint_dir_name = args.checkpoint_dir_name,
-                   fix_rng = args.fix_rng,
                    use_rule = args.use_rule,
                    n_step=args.n_step)
 
@@ -100,7 +99,7 @@ def backsearch():
              teacher_forcing_ratio=args.teacher_forcing_ratio,
              post_flag = args.post_flag)
 
-def step_one():
+def train_seq2seq():
 
     if args.mode == 0:
         encoder_cell = 'lstm'
@@ -129,18 +128,18 @@ def step_one():
                               rnn_cell = None,
                               rnn_cell_name = encoder_cell,
                               variable_lengths = True)
-    decode_model = DecoderRNN_3(vocab_size = data_loader.vocab_len,
-                                class_size = data_loader.classes_len,
-                                embed_model = embed_model,
-                                emb_size = 128,
-                                hidden_size = 1024,
-                                n_layers = 2,
-                                rnn_cell = None,
-                                rnn_cell_name=decoder_cell,
-                                sos_id = data_loader.vocab_dict['END_token'],
-                                eos_id = data_loader.vocab_dict['END_token'],
-                                input_dropout_p = 0.3,
-                                dropout_p = 0.4)
+    decode_model = DecoderRNN(vocab_size = data_loader.vocab_len,
+                              class_size = data_loader.classes_len,
+                              embed_model = embed_model,
+                              emb_size = 128,
+                              hidden_size = 1024,
+                              n_layers = 2,
+                              rnn_cell = None,
+                              rnn_cell_name=decoder_cell,
+                              sos_id = data_loader.vocab_dict['END_token'],
+                              eos_id = data_loader.vocab_dict['END_token'],
+                              input_dropout_p = 0.3,
+                              dropout_p = 0.4)
     seq2seq = Seq2seq(encode_model, decode_model)
 
     if args.cuda_use:
@@ -162,8 +161,7 @@ def step_one():
                            print_every = 10,
                            teacher_schedule = False,
                            checkpoint_dir_name = args.checkpoint_dir_name,
-                           fix_rng = args.fix_rng,
-                           use_rule = args.use_rule)
+                           use_rule = False)
 
 
     print ('start training')
@@ -178,7 +176,7 @@ def step_one():
              teacher_forcing_ratio=args.teacher_forcing_ratio,
              post_flag = args.post_flag)
 
-def step_one_test():
+def test_23k():
 
     data_loader = DataLoader(args)
 
@@ -199,50 +197,24 @@ def step_one_test():
                           loss = NLLLoss(),
                           cuda_use = args.cuda_use)
     name = args.run_flag
-    if name == 'test_23k':
+    #if name == 'test_23k':
+    beam_sizes = [1, 3,5]
+    ans_accs = []
+    for beam_size in beam_sizes:
         test_temp_acc, test_ans_acc = evaluator.evaluate(model = seq2seq,
                                                      data_loader = data_loader,
                                                      data_list = data_loader.math23k_test_list,
-                                                     batch_size = 64,
+                                                     batch_size = 1,
                                                      evaluate_type = 0,
                                                      use_rule = False,
                                                      mode = args.mode,
                                                      post_flag=args.post_flag,
                                                      name_save = name,
                                                      use_rule_old=False,
-                                                     buffer=[],
-                                                     beam_size=args.beam_size)
-    print (test_temp_acc, test_ans_acc)
+                                                     beam_size=beam_size)
+        ans_accs.append(test_ans_acc)
 
-def step_three():
-
-    data_loader = DataLoader(args)
-
-    Checkpoint.CHECKPOINT_DIR_NAME = args.checkpoint_dir_name
-    checkpoint_path = os.path.join("./experiment", Checkpoint.CHECKPOINT_DIR_NAME, "best")
-    checkpoint = Checkpoint.load(checkpoint_path)
-
-    seq2seq = checkpoint.model
-    if args.cuda_use:
-        seq2seq = seq2seq.cuda()
-
-    seq2seq.eval()
-    evaluator = Evaluator(vocab_dict = data_loader.vocab_dict,
-                          vocab_list = data_loader.vocab_list,
-                          decode_classes_dict = data_loader.decode_classes_dict,
-                          decode_classes_list = data_loader.decode_classes_list,
-                          loss = NLLLoss(),
-                          cuda_use = args.cuda_use)
-    test_temp_acc, test_ans_acc = evaluator.evaluate(model = seq2seq,
-                                                     data_loader = data_loader,
-                                                     data_list = data_loader.math57k_data_list,
-                                                     template_flag = False,
-                                                     batch_size = 64,
-                                                     evaluate_type = 0,
-                                                     use_rule = args.use_rule,
-                                                     mode = args.mode,
-                                                     use_rule_old=False)
-    print (test_temp_acc, test_ans_acc)
+    print (ans_accs)
 
 if __name__ == "__main__":
     if args.resume and args.id is None:
@@ -250,7 +222,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if WANDB:
-        wandb.init(project="mwp-postfix-mapo", id=(args.id if args.resume else None))
+        wandb.init(project="mwp-postfix-ma-final", id=(args.id if args.resume else None))
         wandb.config.fix_rng = args.fix_rng
         wandb.config.use_rule = args.use_rule
         wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
@@ -263,12 +235,10 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
 
     if 'test_23k' in args.run_flag:
-        step_one_test()
-    elif args.run_flag == 'test_57k':
-        step_three()
+        test_23k()
     elif args.run_flag == 'train_23k':
-        step_one()
+        train_seq2seq()
     elif args.run_flag == 'backsearch':
-        backsearch()
+        train_backsearch()
     else:
         print ('emmmm..................')
