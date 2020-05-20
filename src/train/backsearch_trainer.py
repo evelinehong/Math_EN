@@ -3,6 +3,7 @@ import random
 from collections import defaultdict
 
 import numpy as np
+
 from model import EncoderRNN, Seq2seq
 from model.DecoderRNN import max_len_single, min_len_single
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
@@ -14,12 +15,11 @@ from torch import optim
 from torch.autograd import Variable
 import torch.nn as nn
 import pdb
+from tqdm.autonotebook import tqdm
 
-WANDB = False
-if WANDB:
-    import wandb
+from torch.utils.tensorboard import SummaryWriter
 
-DEBUG = True
+DEBUG = False
 
 def inverse_temp_to_num(elem, num_list_single):
     alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -36,7 +36,7 @@ def inverse_temp_to_num(elem, num_list_single):
 
 class BackTrainer(object):
     def __init__(self, vocab_dict, vocab_list, decode_classes_dict, decode_classes_list, cuda_use, \
-                 loss, print_every, teacher_schedule, checkpoint_dir_name, use_rule, n_step):
+                 loss, print_every, teacher_schedule, checkpoint_dir_name, use_rule, n_step, wandb):
         self.vocab_dict = vocab_dict
         self.vocab_list = vocab_list
         self.decode_classes_dict = decode_classes_dict
@@ -56,6 +56,9 @@ class BackTrainer(object):
         self.print_every = print_every
 
         self.teacher_schedule = teacher_schedule
+        self.wandb = wandb
+        if wandb:
+            import wandb
 
         Checkpoint.CHECKPOINT_DIR_NAME = checkpoint_dir_name
 
@@ -216,64 +219,65 @@ class BackTrainer(object):
 
         # UPDATE
         random.shuffle(learn_queue)
-        if len(learn_queue) > 0:
-            learn_queue_idx, learn_queue_fixes = map(list, zip(*learn_queue)) #unzip
+        if len(learn_queue) == 0:
+            return 0, [0, match, total]
 
-            mapo_batch_size = 64
-            mapo_last_batch_size = len(learn_queue_idx) % mapo_batch_size
-            mapo_batch_sizes = [mapo_batch_size]*(len(learn_queue_idx)//mapo_batch_size) \
-                               + ([] if mapo_last_batch_size==0 else [mapo_last_batch_size])
-            pos = 0
-            total_avg_loss = 0
-            for mapo_batch_size in mapo_batch_sizes:
-                learn_queue_idx_batch = learn_queue_idx[pos:(pos + mapo_batch_size)]
-                learn_queue_fixes_batch = learn_queue_fixes[pos:(pos + mapo_batch_size)]
+        learn_queue_idx, learn_queue_fixes = map(list, zip(*learn_queue)) #unzip
 
-                mapo_decoder_outputs, mapo_decoder_hidden, mapo_symbols_list = \
-                    model(input_variable=input_variables[learn_queue_idx_batch],
-                          input_lengths=input_lengths[learn_queue_idx_batch],
-                          target_variable=target_variables[learn_queue_idx_batch],
-                          teacher_forcing_ratio=teacher_forcing_ratio,
-                          mode=mode,
-                          use_rule=False,
-                          use_cuda=self.cuda_use,
-                          vocab_dict=self.vocab_dict,
-                          vocab_list=self.vocab_list,
-                          class_dict=self.class_dict,
-                          class_list=self.class_list,
-                          num_list=num_list[learn_queue_idx_batch],
-                          use_rule_old=False,
-                          target_lengths=None,
-                          mask_const=mask_const)
+        mapo_batch_size = 64
+        mapo_last_batch_size = len(learn_queue_idx) % mapo_batch_size
+        mapo_batch_sizes = [mapo_batch_size]*(len(learn_queue_idx)//mapo_batch_size) \
+                           + ([] if mapo_last_batch_size==0 else [mapo_last_batch_size])
+        pos = 0
+        total_avg_loss = 0
+        for mapo_batch_size in mapo_batch_sizes:
+            learn_queue_idx_batch = learn_queue_idx[pos:(pos + mapo_batch_size)]
+            learn_queue_fixes_batch = learn_queue_fixes[pos:(pos + mapo_batch_size)]
 
-                self.loss.reset()
-                for step, step_output in enumerate(mapo_decoder_outputs):
-                    fixed_step = torch.full((mapo_batch_size,), -1, dtype=torch.long)  # -1 ignored in NLLLoss
-                    for i in range(mapo_batch_size):
-                        if step < len(learn_queue_fixes_batch[i]):
-                            fixed_step[i] = torch.tensor(learn_queue_fixes_batch[i][step])
-                        elif step == len(learn_queue_fixes_batch[i]):
-                            fixed_step[i] = self.class_dict['END_token']
-                        else:
-                            fixed_step[i] = self.class_dict['PAD_token']
+            mapo_decoder_outputs, mapo_decoder_hidden, mapo_symbols_list = \
+                model(input_variable=input_variables[learn_queue_idx_batch],
+                      input_lengths=input_lengths[learn_queue_idx_batch],
+                      target_variable=target_variables[learn_queue_idx_batch],
+                      teacher_forcing_ratio=teacher_forcing_ratio,
+                      mode=mode,
+                      use_rule=False,
+                      use_cuda=self.cuda_use,
+                      vocab_dict=self.vocab_dict,
+                      vocab_list=self.vocab_list,
+                      class_dict=self.class_dict,
+                      class_list=self.class_list,
+                      num_list=num_list[learn_queue_idx_batch],
+                      use_rule_old=False,
+                      target_lengths=None,
+                      mask_const=mask_const)
 
-                    if self.cuda_use:
-                        step_output = step_output.cuda()
-                        fixed_step = fixed_step.cuda()
+            self.loss.reset()
+            for step, step_output in enumerate(mapo_decoder_outputs):
+                fixed_step = torch.full((mapo_batch_size,), -1, dtype=torch.long)  # -1 ignored in NLLLoss
+                for i in range(mapo_batch_size):
+                    if step < len(learn_queue_fixes_batch[i]):
+                        fixed_step[i] = torch.tensor(learn_queue_fixes_batch[i][step])
+                    elif step == len(learn_queue_fixes_batch[i]):
+                        fixed_step[i] = self.class_dict['END_token']
+                    else:
+                        fixed_step[i] = -1
 
-                    # loss wrt fixed output
-                    self.loss.eval_batch(step_output.contiguous().view(mapo_batch_size, -1), fixed_step)
+                if self.cuda_use:
+                    step_output = step_output.cuda()
+                    fixed_step = fixed_step.cuda()
 
-                pos += mapo_batch_size
+                # loss wrt fixed output
+                self.loss.eval_batch(step_output.contiguous().view(mapo_batch_size, -1), fixed_step)
 
-                model.zero_grad()
-                self.loss.backward()
-                self.optimizer.step()
+            pos += mapo_batch_size
 
-                total_avg_loss += self.loss.get_loss()
+            model.zero_grad()
+            self.loss.backward()
+            self.optimizer.step()
 
-            return total_avg_loss/len(mapo_batch_sizes), [0, match, total]
-        return 0, [0, match, total]
+            total_avg_loss += self.loss.get_loss()
+
+        return total_avg_loss/len(mapo_batch_sizes), [0, match, total]
 
     def _train_epoches(self, data_loader, model, batch_size, start_epoch, start_step, n_epoch, \
                        mode, teacher_forcing_ratio, post_flag):
@@ -291,6 +295,10 @@ class BackTrainer(object):
 
         threshold = [0] + [1] * 9
 
+        num_batches = int(len(train_list) / batch_size)
+        if len(train_list) % batch_size != 0:
+            num_batches += 1
+
         for epoch in range(start_epoch, n_epoch + 1):
             epoch_loss_total = 0
 
@@ -304,7 +312,7 @@ class BackTrainer(object):
             total_r = 0
 
             model.train(True)
-            for batch_idx, batch_data_dict in enumerate(batch_generator):
+            for batch_idx, batch_data_dict in tqdm(enumerate(batch_generator), total=num_batches, desc=f'epoch {epoch}'):
                 step += 1
                 step_elapsed += 1
                 ids = batch_data_dict['batch_index']
@@ -352,15 +360,16 @@ class BackTrainer(object):
                 if step % self.print_every == 0 and step_elapsed >= self.print_every:
                     print_loss_avg = print_loss_total / self.print_every
                     print_loss_total = 0
-                    print('step: %d, Progress: %d%%, Train %s: %.4f, Teacher_r: %.2f' % (
-                        step,
-                        step * 1.0 / total_steps * 100,
-                        self.loss.name,
-                        print_loss_avg,
-                        teacher_forcing_ratio))
-                    if WANDB:
-                        wandb.log({"epoch": epoch, "avg loss": print_loss_avg}, step=step)
+                    # print('step: %d, Progress: %d%%, Train %s: %.4f, Teacher_r: %.2f' % (
+                    #     step,
+                    #     step * 1.0 / total_steps * 100,
+                    #     self.loss.name,
+                    #     print_loss_avg,
+                    #     teacher_forcing_ratio))
+                    self.writer.add_scalar('epoch', epoch, step)
+                    self.writer.add_scalar('avg loss', print_loss_avg, step)
 
+            print(f'Evaluating epoch {epoch}...')
             model.eval()
             with torch.no_grad():
                 train_temp_acc, train_ans_acc = \
@@ -421,10 +430,12 @@ class BackTrainer(object):
                     max_test_acc = test_ans_acc
                     checkpoint.save_according_name("./experiment", 'best')
                     print(f"Checkpoint best saved! max acc: {max_test_acc}")
-                    if WANDB:
+                    if self.wandb:
+                        import wandb
                         wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/model.pt")
                         wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/trainer_states.pt")
-                if WANDB:
+                if self.wandb:
+                    import wandb
                     wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_train.json")
                     wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
 
@@ -433,15 +444,14 @@ class BackTrainer(object):
             print("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f, max_test_acc: %.2f" \
                   % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_test_acc))
 
-            if WANDB:
-                wandb.log({"epoch": epoch,
-                           "train temp accuracy": train_temp_acc,
-                           "train ans accuracy": train_ans_acc,
-                           "test temp accuracy": test_temp_acc,
-                           "test ans accuracy": test_ans_acc}, step=step)
+            self.writer.add_scalar('epoch', epoch, step)
+            self.writer.add_scalar('train ans accuracy', train_ans_acc, step)
+            self.writer.add_scalar('test ans accuracy', train_ans_acc, step)
 
     def train(self, model, data_loader, batch_size, n_epoch, \
               resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):
+        self.writer = SummaryWriter(f'experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/')
+
         self.evaluator = Evaluator(vocab_dict=self.vocab_dict,
                                    vocab_list=self.vocab_list,
                                    decode_classes_dict=self.decode_classes_dict,
@@ -485,5 +495,7 @@ class BackTrainer(object):
                             mode=mode,
                             teacher_forcing_ratio=teacher_forcing_ratio,
                             post_flag=post_flag)
+
+        self.writer.close()
 
 

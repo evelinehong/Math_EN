@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from .baseRNN import BaseRNN
 from .attention_1 import Attention_1
 
-DEFAULT_NUM_STEPS = 41
+DEFAULT_NUM_STEPS = 21
 
 def isin(ar1, ar2):
     return (ar1[..., None] == ar2).any(-1)
@@ -488,6 +488,9 @@ class DecoderRNN(BaseRNN):
             sequence_symbols_list.append(symbols)
 
             ended = ended | (preds == self.class_dict['END_token']).bool()
+
+            if torch.all(ended):
+                break
 
         return decoder_outputs_list, decoder_hidden, sequence_symbols_list#, attn_list
 

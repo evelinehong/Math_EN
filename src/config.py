@@ -33,6 +33,7 @@ def get_args():
     parser.add_argument('--id', type=str, dest='id', default=None)
 
     parser.add_argument('--beams', type=int, dest='beam_size', default=1)
+    parser.add_argument('--wandb', action='store_true', dest='wandb', default=False)
 
     args = parser.parse_args()
     return args

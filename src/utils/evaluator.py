@@ -13,6 +13,8 @@ from .equ_tools import *
 from utils import NLLLoss, Optimizer, Checkpoint
 import pdb
 
+from tqdm.autonotebook import tqdm
+
 print_flag_ = 0
 
 class Evaluator(object):
@@ -169,7 +171,11 @@ class Evaluator(object):
 
         accs = [0] * beam_size
 
-        for batch_data_dict in batch_generator:
+        num_batches = int(len(data_list) / batch_size)
+        if len(data_list) % batch_size != 0:
+            num_batches += 1
+
+        for batch_data_dict in tqdm(batch_generator, total=num_batches, desc=f"eval {name_save}"):
             input_variables = batch_data_dict['batch_encode_pad_idx']
             input_lengths = batch_data_dict['batch_encode_len']
 
@@ -316,8 +322,9 @@ class Evaluator(object):
         #pdb.set_trace()
         if not os.path.exists(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/"):
             os.makedirs(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/")
-        with open(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
-            json.dump(pg_total_list, f)
+        if name_save != 'train':
+            with open(f"./experiment/{Checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_"+str(post_flag)+"_"+name_save+".json", 'w') as f:
+                json.dump(pg_total_list, f)
         print  ('--------',acc_right, accs, total_num)
         return count*1.0/total_num, acc_right*1.0/total_num
                 

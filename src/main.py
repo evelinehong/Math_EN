@@ -10,16 +10,15 @@ import torch.nn as nn
 import numpy as np
 import random
 
-from train.backsearch_trainer import WANDB
 from utils import DataLoader
 from train import SupervisedTrainer, BackTrainer
 from model import EncoderRNN, DecoderRNN, Seq2seq
 from utils import NLLLoss, Optimizer, Checkpoint, Evaluator
 
-if WANDB:
-    import wandb
-
 args = get_args()
+
+if args.wandb:
+    import wandb
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -68,7 +67,7 @@ def train_backsearch():
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
 
-    if WANDB:
+    if args.wandb:
         wandb.watch(seq2seq)
 
     weight = torch.ones(data_loader.classes_len)
@@ -81,11 +80,12 @@ def train_backsearch():
                    decode_classes_list = data_loader.decode_classes_list,
                    cuda_use = args.cuda_use,
                    loss = loss,
-                   print_every = 10,
+                   print_every = 1,
                    teacher_schedule = False,
                    checkpoint_dir_name = args.checkpoint_dir_name,
                    use_rule = args.use_rule,
-                   n_step=args.n_step)
+                   n_step=args.n_step,
+                   wandb=args.wandb)
 
 
     print ('start training')
@@ -145,7 +145,7 @@ def train_seq2seq():
     if args.cuda_use:
         seq2seq = seq2seq.cuda()
 
-    if WANDB:
+    if args.wandb:
         wandb.watch(seq2seq)
 
     weight = torch.ones(data_loader.classes_len)
@@ -221,11 +221,9 @@ if __name__ == "__main__":
         print('resume must provide id')
         sys.exit(1)
 
-    if WANDB:
-        wandb.init(project="mwp-postfix-ma-final", id=(args.id if args.resume else None))
-        wandb.config.fix_rng = args.fix_rng
+    if args.wandb:
+        wandb.init(project="mwp-postfix-ma-final", id=(args.id if args.resume else None), sync_tensorboard=True)
         wandb.config.use_rule = args.use_rule
-        wandb.config.teacher_forcing_ratio = args.teacher_forcing_ratio
         wandb.config.run_flag = args.run_flag
         wandb.config.n_step = args.n_step
         wandb.config.seed = args.seed
