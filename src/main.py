@@ -183,7 +183,7 @@ def test_23k():
     #Checkpoint.CHECKPOINT_DIR_NAME = "0120_0030"
     Checkpoint.CHECKPOINT_DIR_NAME = args.checkpoint_dir_name
     checkpoint_path = os.path.join("./experiment", Checkpoint.CHECKPOINT_DIR_NAME, "best")
-    checkpoint = Checkpoint.load(checkpoint_path)
+    checkpoint = Checkpoint.load(checkpoint_path, "best")
 
     seq2seq = checkpoint.model
     if args.cuda_use:

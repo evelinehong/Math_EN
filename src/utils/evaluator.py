@@ -13,8 +13,6 @@ from .equ_tools import *
 from utils import NLLLoss, Optimizer, Checkpoint
 import pdb
 
-from tqdm.autonotebook import tqdm
-
 print_flag_ = 0
 
 class Evaluator(object):
@@ -150,9 +148,7 @@ class Evaluator(object):
 
 
     def evaluate(self, model: Seq2seq, data_loader, data_list, batch_size, \
-                 evaluate_type, use_rule, use_rule_old, mode, buffer=None, post_flag=False, name_save='train', beam_size=1):
-        if buffer is None:
-            buffer = []
+                 evaluate_type, use_rule, use_rule_old, mode, post_flag=False, name_save='train', beam_size=1):
         batch_generator = data_loader.get_batch(data_list, batch_size, True)
         total_num = len(data_list) * beam_size
 
@@ -171,11 +167,8 @@ class Evaluator(object):
 
         accs = [0] * beam_size
 
-        num_batches = int(len(data_list) / batch_size)
-        if len(data_list) % batch_size != 0:
-            num_batches += 1
 
-        for batch_data_dict in tqdm(batch_generator, total=num_batches, desc=f"eval {name_save}"):
+        for batch_data_dict in batch_generator:
             input_variables = batch_data_dict['batch_encode_pad_idx']
             input_lengths = batch_data_dict['batch_encode_len']
 
@@ -273,7 +266,7 @@ class Evaluator(object):
                     #print 'gen_ans', gen_ans, '--', 'target_ans', target_ans, '---',
                     #pdb.set_trace()
                     pg_total_list.append(dict({'index': batch_index[i], 'num_list': batch_num_list[i], 'gen_equ': gen_equ, \
-                                               'pg': batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans, 'beam': k, 'buffer': buffer}))
+                                               'pg': batch_pg[i], 'gen_ans': gen_ans, 'ans': target_ans, 'beam': k}))
                     if 'error' in gen_ans:
                         #print False
                         #print

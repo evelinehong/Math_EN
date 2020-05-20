@@ -14,8 +14,8 @@ def convert(o):
 class Checkpoint():
 
     CHECKPOINT_DIR_NAME = 'checkpoints'
-    TRAINER_STATE_NAME = 'trainer_states.pt'
-    MODEL_NAME = 'model.pt'
+    TRAINER_STATE_NAME = 'trainer_states'
+    MODEL_NAME = 'model'
 
     def __init__(self, model, optimizer, epoch, step, train_acc_list, test_acc_list, loss_list, buffer, path=None):
         self.model = model
@@ -47,10 +47,10 @@ class Checkpoint():
                 f.write('\n\n')
         '''
         if os.path.exists(path):
-            if os.path.exists(os.path.join(path, self.TRAINER_STATE_NAME)):
-                os.remove(os.path.join(path, self.TRAINER_STATE_NAME))
-            if os.path.exists(os.path.join(path, self.MODEL_NAME)):
-                os.remove(os.path.join(path, self.MODEL_NAME))
+            if os.path.exists(os.path.join(path, self.TRAINER_STATE_NAME + "_" + filename + ".pt")):
+                os.remove(os.path.join(path, self.TRAINER_STATE_NAME + "_" + filename + ".pt"))
+            if os.path.exists(os.path.join(path, self.MODEL_NAME + "_" + filename + ".pt")):
+                os.remove(os.path.join(path, self.MODEL_NAME + "_" + filename + ".pt"))
         else:
             os.makedirs(path)
         torch.save({'epoch': self.epoch,
@@ -64,8 +64,8 @@ class Checkpoint():
                     'np_rng': np.random.get_state(),
                     'buffer': self.buffer
                    },
-                   os.path.join(path, self.TRAINER_STATE_NAME))
-        torch.save(self.model, os.path.join(path, self.MODEL_NAME))
+                   os.path.join(path, self.TRAINER_STATE_NAME + "_" + filename + ".pt"))
+        torch.save(self.model, os.path.join(path, self.MODEL_NAME + "_" + filename + ".pt"))
         return path
 
     def save_according_time(self, experiment_dir, args):
@@ -95,10 +95,10 @@ class Checkpoint():
         return path
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, suffix):
         print("Loading checkpoints from {}".format(path))
-        resume_checkpoint = torch.load(os.path.join(path, cls.TRAINER_STATE_NAME))
-        model = torch.load(os.path.join(path, cls.MODEL_NAME))
+        resume_checkpoint = torch.load(os.path.join(path, cls.TRAINER_STATE_NAME + "_" + suffix + ".pt"))
+        model = torch.load(os.path.join(path, cls.MODEL_NAME + "_" + suffix + ".pt"))
         model.flatten_parameters()
         optimizer = resume_checkpoint['optimizer']
         torch.random.set_rng_state(resume_checkpoint['torch_rng'])

@@ -379,7 +379,6 @@ class BackTrainer(object):
                                             batch_size=batch_size,
                                             evaluate_type=0,
                                             use_rule=False,
-                                            buffer=self.fix_buffer,
                                             mode=mode,
                                             post_flag=post_flag,
                                             use_rule_old=False)
@@ -402,7 +401,6 @@ class BackTrainer(object):
                                             evaluate_type=0,
                                             use_rule=False,
                                             mode=mode,
-                                            buffer=self.fix_buffer,
                                             post_flag=post_flag,
                                             use_rule_old=False,
                                             name_save="test")
@@ -416,6 +414,8 @@ class BackTrainer(object):
                 self.test_acc_list.append((epoch, step, test_ans_acc))
                 self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
 
+                print("Saving checkpoint...")
+
                 checkpoint = Checkpoint(model=model,
                                         optimizer=self.optimizer,
                                         epoch=epoch,
@@ -426,18 +426,18 @@ class BackTrainer(object):
                                         buffer=self.fix_buffer)
                 checkpoint.save_according_name("./experiment", "latest")
 
+                if self.wandb:
+                    import wandb
+                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
+                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/*.pt")
+
                 if test_ans_acc > max_test_acc:
                     max_test_acc = test_ans_acc
                     checkpoint.save_according_name("./experiment", 'best')
                     print(f"Checkpoint best saved! max acc: {max_test_acc}")
                     if self.wandb:
                         import wandb
-                        wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/model.pt")
-                        wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/trainer_states.pt")
-                if self.wandb:
-                    import wandb
-                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_train.json")
-                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
+                        wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
 
             # print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
@@ -446,7 +446,7 @@ class BackTrainer(object):
 
             self.writer.add_scalar('epoch', epoch, step)
             self.writer.add_scalar('train ans accuracy', train_ans_acc, step)
-            self.writer.add_scalar('test ans accuracy', train_ans_acc, step)
+            self.writer.add_scalar('test ans accuracy', test_ans_acc, step)
 
     def train(self, model, data_loader, batch_size, n_epoch, \
               resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):
@@ -460,7 +460,13 @@ class BackTrainer(object):
                                    cuda_use=self.cuda_use)
         if resume:
             checkpoint_path = Checkpoint.get_certain_checkpoint("./experiment", "latest")
-            resume_checkpoint = Checkpoint.load(checkpoint_path)
+
+            if self.wandb:
+                import wandb
+                wandb.restore('model_latest.pt', root=checkpoint_path)
+                wandb.restore('trainer_states_latest.pt', root=checkpoint_path)
+
+            resume_checkpoint = Checkpoint.load(checkpoint_path, "latest")
             model = resume_checkpoint.model
             self.optimizer = resume_checkpoint.optimizer
 
