@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from .baseRNN import BaseRNN
 from .attention_1 import Attention_1
 
-DEFAULT_NUM_STEPS = 21
+DEFAULT_NUM_STEPS = 15
 
 def isin(ar1, ar2):
     return (ar1[..., None] == ar2).any(-1)

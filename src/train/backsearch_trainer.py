@@ -137,12 +137,14 @@ class BackTrainer(object):
             min_len = min([min_len_single(x) for x in num_list])
             max_len_arr = np.array([max_len_single(x) for x in num_list])
             max_len = max(max_len_arr)
+            found_fix = np.zeros(len(target_lengths), dtype=np.int32)
             for length in range(min_len, max_len, 2):
                 # decoder_outputs: expr_len (list) * batch_size * classes
                 # symbols_list: expr_len (list) * batch_size * 1
 
                 target_length = np.array([length]*len(target_lengths))
                 target_length -= (target_length % 2 == 0)  # force odd
+                target_length *= (1-found_fix)
                 target_length[target_length > max_len_arr] = 0
 
                 if np.all(target_length == 0):
@@ -195,8 +197,10 @@ class BackTrainer(object):
                 for i, new_fix in enumerate(fix_list):
                     total_fix_buffer = self.fix_buffer[ids[i]]
                     if len(new_fix) > 0:
-                        if new_fix not in total_fix_buffer:
-                            total_fix_buffer.append(new_fix)
+                        found_fix[i] = 1
+                        if new_fix in total_fix_buffer:
+                            total_fix_buffer.remove(new_fix)
+                        total_fix_buffer.append(new_fix)
 
         for i in range(batch_size):
             total_fix_buffer = self.fix_buffer[ids[i]]
@@ -405,48 +409,53 @@ class BackTrainer(object):
                                             use_rule_old=False,
                                             name_save="test")
 
-                if len(self.test_acc_list) > 0:
-                    max_test_acc = max([test_acc for _, _, test_acc in self.test_acc_list])
-                else:
-                    max_test_acc = 0
+            if len(self.test_acc_list) > 0:
+                max_test_acc = max([test_acc for _, _, test_acc in self.test_acc_list])
+            else:
+                max_test_acc = 0
 
-                self.train_acc_list.append((epoch, step, train_ans_acc))
-                self.test_acc_list.append((epoch, step, test_ans_acc))
-                self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
+            self.train_acc_list.append((epoch, step, train_ans_acc))
+            self.test_acc_list.append((epoch, step, test_ans_acc))
+            self.loss_list.append((epoch, epoch_loss_total / steps_per_epoch))
 
-                print("Saving checkpoint...")
+            print("Saving checkpoint...")
 
-                checkpoint = Checkpoint(model=model,
-                                        optimizer=self.optimizer,
-                                        epoch=epoch,
-                                        step=step,
-                                        train_acc_list=self.train_acc_list,
-                                        test_acc_list=self.test_acc_list,
-                                        loss_list=self.loss_list,
-                                        buffer=self.fix_buffer)
-                checkpoint.save_according_name("./experiment", "latest")
+            checkpoint = Checkpoint(model=model,
+                                    optimizer=self.optimizer,
+                                    epoch=epoch,
+                                    step=step,
+                                    train_acc_list=self.train_acc_list,
+                                    test_acc_list=self.test_acc_list,
+                                    loss_list=self.loss_list,
+                                    buffer=self.fix_buffer)
+            checkpoint.save_according_name("./experiment", "latest")
 
+            if self.wandb:
+                import wandb
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/*.pt")
+
+            if test_ans_acc > max_test_acc:
+                max_test_acc = test_ans_acc
+                checkpoint.save_according_name("./experiment", 'best')
+                print(f"Checkpoint best saved! max acc: {max_test_acc}")
                 if self.wandb:
                     import wandb
-                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/pg_seq_norm_True_test.json")
-                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/latest/*.pt")
-
-                if test_ans_acc > max_test_acc:
-                    max_test_acc = test_ans_acc
-                    checkpoint.save_according_name("./experiment", 'best')
-                    print(f"Checkpoint best saved! max acc: {max_test_acc}")
-                    if self.wandb:
-                        import wandb
-                        wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
+                    wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/best/*.pt")
 
             # print ("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, validate_acc: %.2f, %.2f, test_acc: %.2f, %.2f"\
             #      % (epoch, step, train_temp_acc, train_ans_acc, valid_temp_acc, valid_ans_acc, test_temp_acc, test_ans_acc))
-            print("Epoch: %d, Step: %d, train_acc: %.2f, %.2f, test_acc: %.2f, %.2f, max_test_acc: %.2f" \
-                  % (epoch, step, train_temp_acc, train_ans_acc, test_temp_acc, test_ans_acc, max_test_acc))
+            print(
+                f"Epoch: {epoch:d}, Step: {step:d}, train_acc: {train_ans_acc:.2f}, test_acc: {test_ans_acc:.2f}, max_test_acc: {max_test_acc:.2f}")
 
             self.writer.add_scalar('epoch', epoch, step)
             self.writer.add_scalar('train ans accuracy', train_ans_acc, step)
             self.writer.add_scalar('test ans accuracy', test_ans_acc, step)
+            self.writer.flush()
+
+            if self.wandb:
+                import wandb
+                wandb.save(f"./experiment/{checkpoint.CHECKPOINT_DIR_NAME}/*tfevents*")
 
     def train(self, model, data_loader, batch_size, n_epoch, \
               resume=False, optimizer=None, mode=0, teacher_forcing_ratio=0, post_flag=False):
@@ -463,8 +472,8 @@ class BackTrainer(object):
 
             if self.wandb:
                 import wandb
-                wandb.restore('model_latest.pt', root=checkpoint_path)
-                wandb.restore('trainer_states_latest.pt', root=checkpoint_path)
+                #wandb.restore('model_latest.pt', root=checkpoint_path)
+                #wandb.restore('trainer_states_latest.pt', root=checkpoint_path)
 
             resume_checkpoint = Checkpoint.load(checkpoint_path, "latest")
             model = resume_checkpoint.model
